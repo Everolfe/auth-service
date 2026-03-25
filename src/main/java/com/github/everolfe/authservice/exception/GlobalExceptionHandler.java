@@ -25,7 +25,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<GetErrorDto> handleDataIntegrityViolation(
             DataIntegrityViolationException ex, WebRequest request) {
         return buildErrorResponse(
-                ex,
                 "A resource with these details already exists or violates data constraints.",
                 HttpStatus.CONFLICT,
                 request
@@ -37,7 +36,7 @@ public class GlobalExceptionHandler {
             JwtException ex, WebRequest request) {
 
         return buildErrorResponse(
-                ex, "JWT Token is expired or invalid: " + ex.getMessage(),
+                "JWT Token is expired or invalid: " + ex.getMessage(),
                 HttpStatus.UNAUTHORIZED, request
         );
     }
@@ -52,7 +51,6 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
 
         return buildErrorResponse(
-                ex,
                 errorMessage,
                 HttpStatus.BAD_REQUEST,
                 request
@@ -64,7 +62,7 @@ public class GlobalExceptionHandler {
             UsernameNotFoundException ex, WebRequest request) {
 
         return buildErrorResponse(
-                ex, ex.getMessage(),
+                ex.getMessage(),
                 HttpStatus.NOT_FOUND, request
         );
     }
@@ -74,7 +72,6 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException ex, WebRequest request) {
 
         return buildErrorResponse(
-                ex,
                 "Invalid request body: JSON is malformed.",
                 HttpStatus.BAD_REQUEST,
                 request
@@ -86,7 +83,6 @@ public class GlobalExceptionHandler {
             AuthenticationException ex, WebRequest request) {
 
         return buildErrorResponse(
-                ex,
                 "Authentication failed: " + ex.getMessage(),
                 HttpStatus.UNAUTHORIZED,
                 request
@@ -98,7 +94,7 @@ public class GlobalExceptionHandler {
             BadCredentialsException ex, WebRequest request) {
 
         return buildErrorResponse(
-                ex, "Invalid username or password",
+                "Invalid username or password",
                 HttpStatus.UNAUTHORIZED, request
         );
     }
@@ -108,7 +104,6 @@ public class GlobalExceptionHandler {
             AccessDeniedException ex, WebRequest request) {
 
         return buildErrorResponse(
-                ex,
                 "Access Denied: You do not have permission to access this resource.",
                 HttpStatus.FORBIDDEN,
                 request
@@ -116,7 +111,7 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<GetErrorDto> buildErrorResponse(
-            Exception ex, String message, HttpStatus status, WebRequest request) {
+            String message, HttpStatus status, WebRequest request) {
 
         GetErrorDto errorDto = new GetErrorDto(
                 LocalDateTime.now(),

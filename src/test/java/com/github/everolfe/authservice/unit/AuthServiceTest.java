@@ -266,7 +266,6 @@ class AuthServiceTest {
 
     @Test
     void testRefreshTokenWithMalformedSub() {
-        // Подготовка
         GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
         String refreshTokenValue = "valid-refresh-token";
         refreshTokenDto.setRefreshToken(refreshTokenValue);
@@ -274,7 +273,6 @@ class AuthServiceTest {
         when(jwtService.isTokenExpired(refreshTokenValue)).thenReturn(false);
         when(jwtService.extractSub(refreshTokenValue)).thenReturn("not-a-valid-uuid");
 
-        // Выполнение и проверка
         assertThrows(IllegalArgumentException.class, () -> authService.refreshToken(refreshTokenDto));
 
         verify(jwtService, times(1)).isTokenExpired(refreshTokenValue);
@@ -345,11 +343,9 @@ class AuthServiceTest {
 
     @Test
     void testRegisterCreatesProfileDtoWithoutOptionalFields() {
-        // Подготовка - создаем DTO без опциональных полей
         CreateAuthDto createAuthDto = new CreateAuthDto();
         createAuthDto.setEmail("test@example.com");
         createAuthDto.setPassword("password123");
-        // name, surname, birthDate не установлены
 
         when(passwordEncoder.encode(createAuthDto.getPassword())).thenReturn("encodedPassword");
         when(restTemplate.postForObject(anyString(), any(CreateProfileDto.class), eq(String.class)))
@@ -357,10 +353,8 @@ class AuthServiceTest {
 
         ArgumentCaptor<CreateProfileDto> profileDtoCaptor = ArgumentCaptor.forClass(CreateProfileDto.class);
 
-        // Выполнение
         authService.register(createAuthDto);
 
-        // Проверка
         verify(restTemplate).postForObject(anyString(), profileDtoCaptor.capture(), eq(String.class));
 
         CreateProfileDto capturedProfileDto = profileDtoCaptor.getValue();
@@ -373,7 +367,7 @@ class AuthServiceTest {
 
     @Test
     void testLoginCreatesCorrectAuthenticationToken() {
-        // Подготовка
+
         CreateAuthDto createAuthDto = new CreateAuthDto();
         createAuthDto.setEmail("test@example.com");
         createAuthDto.setPassword("password123");
@@ -397,10 +391,9 @@ class AuthServiceTest {
         when(authentication.getPrincipal()).thenReturn(userCredential);
         when(jwtService.generateTokens(userCredential)).thenReturn(tokens);
 
-        // Выполнение
+
         authService.login(createAuthDto);
 
-        // Проверяем, что authenticationManager вызван с правильными параметрами
         verify(authenticationManager).authenticate(argThat(token -> {
             UsernamePasswordAuthenticationToken authToken = (UsernamePasswordAuthenticationToken) token;
             return "test@example.com".equals(authToken.getPrincipal()) &&
@@ -410,7 +403,6 @@ class AuthServiceTest {
 
     @Test
     void testRegisterSavesUserWithCorrectRoleAndSub() {
-        // Подготовка
         CreateAuthDto createAuthDto = new CreateAuthDto();
         createAuthDto.setEmail("test@example.com");
         createAuthDto.setPassword("password123");
@@ -423,10 +415,8 @@ class AuthServiceTest {
 
         ArgumentCaptor<UserCredential> userCredentialCaptor = ArgumentCaptor.forClass(UserCredential.class);
 
-        // Выполнение
         authService.register(createAuthDto);
 
-        // Проверяем, что сохраняется пользователь с правильными данными
         verify(userCredentialRepository).save(userCredentialCaptor.capture());
 
         UserCredential savedCredential = userCredentialCaptor.getValue();
@@ -438,7 +428,6 @@ class AuthServiceTest {
 
     @Test
     void testRegisterGeneratesUniqueSubForEachUser() {
-        // Подготовка
         CreateAuthDto createAuthDto1 = new CreateAuthDto();
         createAuthDto1.setEmail("user1@example.com");
         createAuthDto1.setPassword("password123");
@@ -452,13 +441,10 @@ class AuthServiceTest {
                 .thenReturn("success");
 
         ArgumentCaptor<UserCredential> userCaptor1 = ArgumentCaptor.forClass(UserCredential.class);
-        ArgumentCaptor<UserCredential> userCaptor2 = ArgumentCaptor.forClass(UserCredential.class);
 
-        // Выполнение
         authService.register(createAuthDto1);
         authService.register(createAuthDto2);
 
-        // Проверка
         verify(userCredentialRepository, times(2)).save(userCaptor1.capture());
 
         UserCredential user1 = userCaptor1.getAllValues().get(0);

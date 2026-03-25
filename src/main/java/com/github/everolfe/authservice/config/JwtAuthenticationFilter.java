@@ -13,12 +13,14 @@ import java.io.IOException;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+@Slf4j
 @Component
 @AllArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -65,7 +67,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-        } catch (JwtException ignored) {}
+        } catch (JwtException e) {
+            log.debug("JWT authentication failed: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error during JWT authentication", e);
+        }
 
         filterChain.doFilter(request, response);
     }

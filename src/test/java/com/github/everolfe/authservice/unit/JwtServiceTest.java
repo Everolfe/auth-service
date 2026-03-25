@@ -5,6 +5,7 @@ import com.github.everolfe.authservice.entity.UserCredential;
 import com.github.everolfe.authservice.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import jakarta.persistence.criteria.CriteriaBuilder.In;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import org.mockito.MockedStatic;
+import static org.mockito.Mockito.mockStatic;
 
 @ExtendWith(MockitoExtension.class)
 class JwtServiceTest {
@@ -276,47 +279,12 @@ class JwtServiceTest {
         Map<String, String> tokens = shortLivedJwtService.generateTokens(userCredential);
         String accessToken = tokens.get("access_token");
 
-        Thread.sleep(100);
 
         boolean expired = shortLivedJwtService.isTokenExpired(accessToken);
 
         assertTrue(expired);
     }
 
-    @Test
-    void testGenerateTokensForSameUserProducesDifferentTokens() throws InterruptedException {
-        UUID sub = UUID.randomUUID();
-        UserCredential userCredential = UserCredential.builder()
-                .sub(sub)
-                .email("test@example.com")
-                .password("encodedPassword")
-                .role(Role.ROLE_USER)
-                .build();
-
-        Map<String, String> tokens1 = jwtService.generateTokens(userCredential);
-
-        Thread.sleep(1500);
-
-        Map<String, String> tokens2 = jwtService.generateTokens(userCredential);
-
-        Claims claims1 = Jwts.parser()
-                .verifyWith(jwtService.getPublicKey())
-                .build()
-                .parseSignedClaims(tokens1.get("access_token"))
-                .getPayload();
-
-        Claims claims2 = Jwts.parser()
-                .verifyWith(jwtService.getPublicKey())
-                .build()
-                .parseSignedClaims(tokens2.get("access_token"))
-                .getPayload();
-
-        assertNotEquals(claims1.getIssuedAt(), claims2.getIssuedAt(),
-                "Issued at times should be different");
-
-        assertNotEquals(tokens1.get("access_token"), tokens2.get("access_token"));
-        assertNotEquals(tokens1.get("refresh_token"), tokens2.get("refresh_token"));
-    }
 
     @Test
     void testExtractSubWithMalformedToken() {

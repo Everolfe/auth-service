@@ -9,6 +9,8 @@ import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
+import java.time.Duration;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -191,40 +193,43 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .extract()
                 .as(GetAuthDto.class);
 
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        GetAuthDto newTokens = Awaitility.await()
+                .atMost(Duration.ofSeconds(5))
+                .pollInterval(Duration.ofMillis(100))
+                .until(() -> {
+                    GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
+                    refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
 
-        GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
-        refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
+                    GetAuthDto tokens = given()
+                            .contentType(ContentType.JSON)
+                            .body(refreshTokenDto)
+                            .when()
+                            .post(AUTH_PATH + "/refresh")
+                            .then()
+                            .statusCode(HttpStatus.OK.value())
+                            .extract()
+                            .as(GetAuthDto.class);
 
-        GetAuthDto newTokens = given()
-                .contentType(ContentType.JSON)
-                .body(refreshTokenDto)
-                .when()
-                .post(AUTH_PATH + "/refresh")
-                .then()
-                .statusCode(HttpStatus.OK.value())
-                .extract()
-                .as(GetAuthDto.class);
+                    // Возвращаем токены только если они отличаются от старых
+                    if (!tokens.getAccessToken().equals(loginResponse.getAccessToken()) &&
+                            !tokens.getRefreshToken().equals(loginResponse.getRefreshToken())) {
+                        return tokens;
+                    }
+                    return null;
+                }, t -> t != null);
 
         assertThat(newTokens).isNotNull();
         assertThat(newTokens.getAccessToken()).isNotNull();
         assertThat(newTokens.getRefreshToken()).isNotNull();
 
         assertThat(newTokens.getAccessToken())
-                .as("Access token should be different after refresh")
                 .isNotEqualTo(loginResponse.getAccessToken());
 
         assertThat(newTokens.getRefreshToken())
-                .as("Refresh token should be different after refresh")
                 .isNotEqualTo(loginResponse.getRefreshToken());
 
         assertThat(newTokens.getRefreshToken())
-                .as("New refresh token should not be equal to old one")
-                .isNotEqualTo(refreshTokenDto.getRefreshToken());
+                .isNotEqualTo(loginResponse.getRefreshToken());
     }
 
     @Test
@@ -251,8 +256,9 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .extract()
                 .as(Map.class);
 
-        assertThat(jwkSet).isNotNull();
-        assertThat(jwkSet).containsKey("keys");
+        assertThat(jwkSet)
+                .isNotNull()
+                .containsKey("keys");
 
         Object keys = jwkSet.get("keys");
         assertThat(keys).isInstanceOf(java.util.List.class);
@@ -262,9 +268,9 @@ class AuthIntegrationTest extends BaseIntegrationTest {
 
         Map<String, Object> firstKey = (Map<String, Object>) keyList.get(0);
         assertThat(firstKey).containsKey("kty");
-        assertThat(firstKey.get("kty")).isEqualTo("RSA");
+        assertThat(firstKey).containsEntry("kty", "RSA");
         assertThat(firstKey).containsKey("kid");
-        assertThat(firstKey.get("kid")).isEqualTo("main-rsa-key");
+        assertThat(firstKey).containsEntry("kid", "main-rsa-key");
     }
 
     @Test
