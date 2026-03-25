@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260306-2" author="Everolfe">
+        <comment>Create indexes for user_credentials table</comment>
+
+        <createIndex indexName="idx_user_credentials_email"
+                     tableName="user_credentials"
+                     unique="true">
+            <column name="email"/>
+        </createIndex>
+
+        <createIndex indexName="idx_user_credentials_sub"
+                     tableName="user_credentials"
+                     unique="true">
+            <column name="sub"/>
+        </createIndex>
+
+        <createIndex indexName="idx_user_credentials_role"
+                     tableName="user_credentials">
+            <column name="role"/>
+        </createIndex>
+
+        <createIndex indexName="idx_user_credentials_email_role"
+                     tableName="user_credentials">
+            <column name="email"/>
+            <column name="role"/>
+        </createIndex>
+
+    </changeSet>
+
+</databaseChangeLog>
