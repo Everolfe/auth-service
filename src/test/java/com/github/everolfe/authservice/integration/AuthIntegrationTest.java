@@ -267,10 +267,11 @@ class AuthIntegrationTest extends BaseIntegrationTest {
         assertThat(keyList).isNotEmpty();
 
         Map<String, Object> firstKey = (Map<String, Object>) keyList.get(0);
-        assertThat(firstKey).containsKey("kty");
-        assertThat(firstKey).containsEntry("kty", "RSA");
-        assertThat(firstKey).containsKey("kid");
-        assertThat(firstKey).containsEntry("kid", "main-rsa-key");
+        assertThat(firstKey)
+                .containsKey("kty")
+                .containsEntry("kty", "RSA")
+                .containsKey("kid")
+                .containsEntry("kid", "main-rsa-key");
     }
 
     @Test

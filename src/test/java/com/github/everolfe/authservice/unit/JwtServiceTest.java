@@ -5,7 +5,6 @@ import com.github.everolfe.authservice.entity.UserCredential;
 import com.github.everolfe.authservice.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import jakarta.persistence.criteria.CriteriaBuilder.In;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,8 +19,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import org.mockito.MockedStatic;
-import static org.mockito.Mockito.mockStatic;
 
 @ExtendWith(MockitoExtension.class)
 class JwtServiceTest {
@@ -264,7 +261,7 @@ class JwtServiceTest {
     }
 
     @Test
-    void testAccessTokenExpirationTime() throws InterruptedException {
+    void testAccessTokenExpirationTime() {
         JwtService shortLivedJwtService = new JwtService();
         ReflectionTestUtils.setField(shortLivedJwtService, "accessTokenExpirationMinutes", 0L);
         ReflectionTestUtils.setField(shortLivedJwtService, "refreshTokenExpirationDays", 2L);
