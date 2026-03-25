@@ -19,6 +19,20 @@
         <jjwt.version>0.12.5</jjwt.version>
         <lombok.version>1.18.30</lombok.version>
         <testcontainers.version>1.20.4</testcontainers.version>
+
+        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+
+        <sonar.coverage.exclusions>
+            **/com/github/everolfe/authservice/UserServiceApplication.java,
+            **/com/github/everolfe/authservice/entity/**,
+            **/com/github/everolfe/authservice/dao/**,
+            **/com/github/everolfe/authservice/exception/**,
+            **/com/github/everolfe/authservice/dto/**,
+            **/com/github/everolfe/authservice/controller/**,
+            **/com/github/everolfe/authservice/config/**,
+            **/com/github/everolfe/authservice/security/**
+        </sonar.coverage.exclusions>
+        <sonar.tests>src/test/java</sonar.tests>
     </properties>
 
     <dependencies>
