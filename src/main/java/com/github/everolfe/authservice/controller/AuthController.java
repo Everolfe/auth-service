@@ -23,11 +23,25 @@ public class AuthController {
 
     private final AuthServiceImpl authServiceImpl;
 
+
+    /**
+     * Authenticates a user and returns access and refresh tokens.
+     *
+     * @param createAuthDto the user credentials (email/username and password)
+     * @return {@link GetAuthDto} containing the generated tokens
+     */
     @PostMapping("/login")
     public ResponseEntity<GetAuthDto> login(@Valid @RequestBody CreateAuthDto createAuthDto ) {
         return ResponseEntity.ok(authServiceImpl.login(createAuthDto));
     }
 
+    /**
+     * Registers a new user account.
+     *
+     * @param createAuthDto the user credentials for registration
+     * @return success message if registration is successful,
+     *         or error message if service is unavailable
+     */
     @PostMapping("/register")
     public ResponseEntity<String> register(@Valid @RequestBody CreateAuthDto createAuthDto ) {
         if(authServiceImpl.register(createAuthDto)) {
@@ -38,11 +52,24 @@ public class AuthController {
         }
     }
 
+    /**
+     * Refreshes the access token using a valid refresh token.
+     *
+     * @param getRefreshTokenDto the DTO containing the refresh token
+     * @return {@link GetAuthDto} containing new access and refresh tokens
+     */
     @PostMapping("/refresh")
     public ResponseEntity<GetAuthDto> refresh(@Valid @RequestBody GetRefreshTokenDto getRefreshTokenDto) {
         return ResponseEntity.ok(authServiceImpl.refreshToken(getRefreshTokenDto));
     }
 
+    /**
+     * Logs out a user by invalidating the provided refresh token.
+     *
+     * @param authorization the Authorization header containing the Bearer token
+     * @return success message if logout was successful,
+     *         or error message if the token format is invalid
+     */
     @PostMapping("/logout")
     public ResponseEntity<String> logout(@RequestHeader("Authorization") String authorization) {
         if (authorization != null && authorization.startsWith("Bearer ")) {
@@ -53,6 +80,13 @@ public class AuthController {
         return ResponseEntity.badRequest().body("Invalid token");
     }
 
+    /**
+     * Validates a JWT token and returns its status.
+     *
+     * @param authorization the Authorization header containing the Bearer token (optional)
+     * @return "VALID: username" if token is valid,
+     *         "INVALID: reason" with 401 status if token is invalid or missing
+     */
     @GetMapping("/validate")
     public ResponseEntity<String> validate(@RequestHeader(value = "Authorization", required = false) String authorization) {
         String result = authServiceImpl.validateToken(authorization);
@@ -64,6 +98,12 @@ public class AuthController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * Retrieves the JSON Web Key Set (JWKS) for token signature verification.
+     * This endpoint is used by OAuth2 clients to validate JWT signatures.
+     *
+     * @return a map containing the JWKS configuration
+     */
     @GetMapping("/well-known/jwks.json")
     public ResponseEntity<Map<String,Object>> wellKnownJwks() {
         return ResponseEntity.ok(authServiceImpl.getJwtSet());

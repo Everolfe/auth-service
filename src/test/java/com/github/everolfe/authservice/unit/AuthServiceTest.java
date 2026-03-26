@@ -20,6 +20,9 @@ import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -514,25 +517,11 @@ class AuthServiceTest {
         verify(jwtServiceImpl, times(1)).validateTokenAndGetUserId(cleanToken);
     }
 
-    @Test
-    void testValidateToken_WithNullToken() {
-        String result = authServiceImpl.validateToken(null);
-
-        assertEquals("INVALID: Token is required", result);
-        verify(jwtServiceImpl, never()).validateTokenAndGetUserId(anyString());
-    }
-
-    @Test
-    void testValidateToken_WithBlankToken() {
-        String result = authServiceImpl.validateToken("   ");
-
-        assertEquals("INVALID: Token is required", result);
-        verify(jwtServiceImpl, never()).validateTokenAndGetUserId(anyString());
-    }
-
-    @Test
-    void testValidateToken_WithEmptyToken() {
-        String result = authServiceImpl.validateToken("");
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t", "\n", "  \t  "})
+    void testValidateToken_WithNullOrBlankToken(String token) {
+        String result = authServiceImpl.validateToken(token);
 
         assertEquals("INVALID: Token is required", result);
         verify(jwtServiceImpl, never()).validateTokenAndGetUserId(anyString());

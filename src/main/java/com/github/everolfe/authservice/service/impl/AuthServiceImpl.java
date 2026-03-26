@@ -45,7 +45,10 @@ public class AuthServiceImpl implements AuthService {
     private final OutboxRepository outboxRepository;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
+    private static final String ACCESS_TOKEN = "access_token";
+    private static final String REFRESH_TOKEN = "refresh_token";
     private static final String REFRESH_TOKEN_PREFIX = "refresh_token:";
+    private static final String USER_TOKEN_PREFIX = "user_tokens:";
 
     @Value("${app.userservice.url:http://localhost:8081/api/users/internal/register}")
     private String userServiceUrl;
@@ -99,12 +102,12 @@ public class AuthServiceImpl implements AuthService {
 
             Map<String,String> tokens = jwtService.generateTokens(userCredential);
 
-            String refreshToken = tokens.get("refresh_token");
+            String refreshToken = tokens.get(REFRESH_TOKEN);
             storeRefreshToken(refreshToken, userCredential.getSub());
 
             return GetAuthDto.builder()
-                    .accessToken(tokens.get("access_token"))
-                    .refreshToken(tokens.get("refresh_token"))
+                    .accessToken(tokens.get(ACCESS_TOKEN))
+                    .refreshToken(tokens.get(REFRESH_TOKEN))
                     .build();
 
         } else {
@@ -141,12 +144,12 @@ public class AuthServiceImpl implements AuthService {
 
         Map<String,String> tokens = jwtService.generateTokens(credential);
 
-        String newRefreshToken = tokens.get("refresh_token");
+        String newRefreshToken = tokens.get(REFRESH_TOKEN);
         storeRefreshToken(newRefreshToken, credential.getSub());
 
         return GetAuthDto.builder()
-                .accessToken(tokens.get("access_token"))
-                .refreshToken(tokens.get("refresh_token"))
+                .accessToken(tokens.get(ACCESS_TOKEN))
+                .refreshToken(tokens.get(REFRESH_TOKEN))
                 .build();
     }
 
@@ -156,14 +159,14 @@ public class AuthServiceImpl implements AuthService {
         String jti = jwtService.extractJti(refreshToken);
         String sub = jwtService.extractSub(refreshToken);
         redisTemplate.delete(REFRESH_TOKEN_PREFIX + jti);
-        String userTokensKey = "user_tokens:" + sub;
+        String userTokensKey = USER_TOKEN_PREFIX + sub;
         redisTemplate.opsForSet().remove(userTokensKey, jti);
     }
 
     @Override
     @Transactional
     public void revokeAllUserTokens(UUID userSub) {
-        String userTokensKey = "user_tokens:" + userSub;
+        String userTokensKey = USER_TOKEN_PREFIX + userSub;
         Set<String> userJtis = redisTemplate.opsForSet().members(userTokensKey);
         if (userJtis != null && !userJtis.isEmpty()) {
             for (String jti : userJtis) {
@@ -207,10 +210,8 @@ public class AuthServiceImpl implements AuthService {
                 Duration.ofHours(refreshTokenExpirationHours)
         );
 
-        String userTokensKey = "user_tokens:" + userSub;
+        String userTokensKey = USER_TOKEN_PREFIX + userSub;
         redisTemplate.opsForSet().add(userTokensKey, jti);
         redisTemplate.expire(userTokensKey, Duration.ofHours(refreshTokenExpirationHours));
     }
-
-
 }
