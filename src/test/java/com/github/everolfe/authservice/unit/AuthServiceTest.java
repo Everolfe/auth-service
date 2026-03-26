@@ -1,14 +1,19 @@
 package com.github.everolfe.authservice.unit;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.everolfe.authservice.dao.OutboxRepository;
 import com.github.everolfe.authservice.dao.UserCredentialRepository;
 import com.github.everolfe.authservice.dto.CreateProfileDto;
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
+import com.github.everolfe.authservice.entity.Outbox;
 import com.github.everolfe.authservice.entity.Role;
 import com.github.everolfe.authservice.entity.UserCredential;
-import com.github.everolfe.authservice.service.AuthService;
 import com.github.everolfe.authservice.service.JwtService;
+import com.github.everolfe.authservice.service.impl.AuthServiceImpl;
+import com.github.everolfe.authservice.service.impl.JwtServiceImpl;
 import io.jsonwebtoken.JwtException;
 import java.security.interfaces.RSAPublicKey;
 import java.util.List;
@@ -19,13 +24,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
@@ -47,24 +54,39 @@ class AuthServiceTest {
     private UserCredentialRepository userCredentialRepository;
 
     @Mock
+    private OutboxRepository outboxRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
-    private JwtService jwtService;
+    private JwtServiceImpl jwtServiceImpl;
 
     @Mock
     private RestTemplate restTemplate;
 
+    @Mock
+    private ObjectMapper objectMapper;
+
+    @Mock
+    private RedisTemplate<String, String> redisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> valueOperations;
+
+    @Mock
+    private SetOperations<String, String> setOperations;
+
     @InjectMocks
-    private AuthService authService;
+    private AuthServiceImpl authServiceImpl;
 
     @BeforeEach
-    void setUp(){
-        ReflectionTestUtils.setField(authService, "userServiceUrl", "http://localhost:8081/api/users/internal/register");
+    void setUp() {
+        ReflectionTestUtils.setField(authServiceImpl, "userServiceUrl", "http://localhost:8081/api/users/internal/register");
     }
 
     @Test
-    void testRegisterSuccess() {
+    void testRegisterSuccess() throws JsonProcessingException {
         CreateAuthDto createAuthDto = new CreateAuthDto();
         createAuthDto.setEmail("test@example.com");
         createAuthDto.setPassword("password123");
@@ -75,53 +97,41 @@ class AuthServiceTest {
         String encodedPassword = "encodedPassword";
 
         when(passwordEncoder.encode(createAuthDto.getPassword())).thenReturn(encodedPassword);
-        when(restTemplate.postForObject(anyString(), any(CreateProfileDto.class), eq(String.class)))
-                .thenReturn("success");
         when(userCredentialRepository.save(any(UserCredential.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectMapper.writeValueAsString(any(CreateProfileDto.class)))
+                .thenReturn("{\"sub\":\"test\",\"email\":\"test@example.com\"}");
+        when(outboxRepository.save(any(Outbox.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        boolean result = authService.register(createAuthDto);
+        boolean result = authServiceImpl.register(createAuthDto);
 
         assertTrue(result);
         verify(passwordEncoder, times(1)).encode("password123");
-        verify(restTemplate, times(1)).postForObject(anyString(), any(CreateProfileDto.class), eq(String.class));
         verify(userCredentialRepository, times(1)).save(any(UserCredential.class));
+        verify(objectMapper, times(1)).writeValueAsString(any(CreateProfileDto.class));
+        verify(outboxRepository, times(1)).save(any(Outbox.class));
+        verify(restTemplate, never()).postForObject(anyString(), any(), any());
     }
 
     @Test
-    void testRegisterWithUserServiceFailure() {
-        CreateAuthDto createAuthDto = new CreateAuthDto();
-        createAuthDto.setEmail("test@example.com");
-        createAuthDto.setPassword("password123");
-        createAuthDto.setName("John");
-        createAuthDto.setSurname("Doe");
-
-        when(passwordEncoder.encode(createAuthDto.getPassword())).thenReturn("encodedPassword");
-        when(restTemplate.postForObject(anyString(), any(CreateProfileDto.class), eq(String.class)))
-                .thenThrow(new RestClientException("User service unavailable"));
-
-        boolean result = authService.register(createAuthDto);
-
-        assertFalse(result);
-        verify(passwordEncoder, times(1)).encode(createAuthDto.getPassword());
-        verify(restTemplate, times(1)).postForObject(anyString(), any(CreateProfileDto.class), eq(String.class));
-        verify(userCredentialRepository, never()).save(any(UserCredential.class));
-    }
-
-    @Test
-    void testRegisterWithExceptionThrown() {
+    void testRegisterWithJsonProcessingException() throws JsonProcessingException {
         CreateAuthDto createAuthDto = new CreateAuthDto();
         createAuthDto.setEmail("test@example.com");
         createAuthDto.setPassword("password123");
 
         when(passwordEncoder.encode(createAuthDto.getPassword())).thenReturn("encodedPassword");
-        when(restTemplate.postForObject(anyString(), any(CreateProfileDto.class), eq(String.class)))
-                .thenThrow(new RuntimeException("Network error"));
+        when(userCredentialRepository.save(any(UserCredential.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectMapper.writeValueAsString(any(CreateProfileDto.class)))
+                .thenThrow(new JsonProcessingException("JSON error") {});
 
-        boolean result = authService.register(createAuthDto);
+        boolean result = authServiceImpl.register(createAuthDto);
 
         assertFalse(result);
-        verify(userCredentialRepository, never()).save(any(UserCredential.class));
+        verify(userCredentialRepository, times(1)).save(any(UserCredential.class));
+        verify(objectMapper, times(1)).writeValueAsString(any(CreateProfileDto.class));
+        verify(outboxRepository, never()).save(any(Outbox.class));
     }
 
     @Test
@@ -145,20 +155,25 @@ class AuthServiceTest {
                 "refresh_token", "refresh-token-value"
         );
 
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(userCredential);
-        when(jwtService.generateTokens(userCredential)).thenReturn(tokens);
+        when(jwtServiceImpl.generateTokens(userCredential)).thenReturn(tokens);
+        when(jwtServiceImpl.extractJti(anyString())).thenReturn("test-jti");
 
-        GetAuthDto result = authService.login(createAuthDto);
+        GetAuthDto result = authServiceImpl.login(createAuthDto);
 
         assertNotNull(result);
         assertEquals("access-token-value", result.getAccessToken());
         assertEquals("refresh-token-value", result.getRefreshToken());
 
         verify(authenticationManager, times(1)).authenticate(any(UsernamePasswordAuthenticationToken.class));
-        verify(jwtService, times(1)).generateTokens(userCredential);
+        verify(jwtServiceImpl, times(1)).generateTokens(userCredential);
+        verify(valueOperations, times(1)).set(anyString(), anyString(), any());
+        verify(setOperations, times(1)).add(anyString(), anyString());
     }
 
     @Test
@@ -170,10 +185,10 @@ class AuthServiceTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new BadCredentialsException("Invalid credentials"));
 
-        assertThrows(BadCredentialsException.class, () -> authService.login(createAuthDto));
+        assertThrows(BadCredentialsException.class, () -> authServiceImpl.login(createAuthDto));
 
         verify(authenticationManager, times(1)).authenticate(any(UsernamePasswordAuthenticationToken.class));
-        verify(jwtService, never()).generateTokens(any());
+        verify(jwtServiceImpl, never()).generateTokens(any());
     }
 
     @Test
@@ -188,9 +203,9 @@ class AuthServiceTest {
                 .thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(false);
 
-        assertThrows(BadCredentialsException.class, () -> authService.login(createAuthDto));
+        assertThrows(BadCredentialsException.class, () -> authServiceImpl.login(createAuthDto));
 
-        verify(jwtService, never()).generateTokens(any());
+        verify(jwtServiceImpl, never()).generateTokens(any());
     }
 
     @Test
@@ -212,21 +227,26 @@ class AuthServiceTest {
                 "refresh_token", "new-refresh-token"
         );
 
-        when(jwtService.isTokenExpired(refreshTokenValue)).thenReturn(false);
-        when(jwtService.extractSub(refreshTokenValue)).thenReturn(sub.toString());
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(jwtServiceImpl.isTokenExpired(refreshTokenValue)).thenReturn(false);
+        when(jwtServiceImpl.isRefreshToken(refreshTokenValue)).thenReturn(true);
+        when(jwtServiceImpl.extractJti(refreshTokenValue)).thenReturn("test-jti");
+        when(jwtServiceImpl.extractSub(refreshTokenValue)).thenReturn(sub.toString());
+        when(redisTemplate.hasKey(anyString())).thenReturn(true);
         when(userCredentialRepository.findBySub(sub)).thenReturn(Optional.of(userCredential));
-        when(jwtService.generateTokens(userCredential)).thenReturn(tokens);
+        when(jwtServiceImpl.generateTokens(userCredential)).thenReturn(tokens);
 
-        GetAuthDto result = authService.refreshToken(refreshTokenDto);
+        GetAuthDto result = authServiceImpl.refreshToken(refreshTokenDto);
 
         assertNotNull(result);
         assertEquals("new-access-token", result.getAccessToken());
         assertEquals("new-refresh-token", result.getRefreshToken());
 
-        verify(jwtService, times(1)).isTokenExpired(refreshTokenValue);
-        verify(jwtService, times(1)).extractSub(refreshTokenValue);
+        verify(jwtServiceImpl, times(1)).isTokenExpired(refreshTokenValue);
+        verify(jwtServiceImpl, times(1)).extractSub(refreshTokenValue);
         verify(userCredentialRepository, times(1)).findBySub(sub);
-        verify(jwtService, times(1)).generateTokens(userCredential);
+        verify(jwtServiceImpl, times(1)).generateTokens(userCredential);
     }
 
     @Test
@@ -235,12 +255,12 @@ class AuthServiceTest {
         String refreshTokenValue = "expired-refresh-token";
         refreshTokenDto.setRefreshToken(refreshTokenValue);
 
-        when(jwtService.isTokenExpired(refreshTokenValue)).thenReturn(true);
+        when(jwtServiceImpl.isTokenExpired(refreshTokenValue)).thenReturn(true);
 
-        assertThrows(JwtException.class, () -> authService.refreshToken(refreshTokenDto));
+        assertThrows(JwtException.class, () -> authServiceImpl.refreshToken(refreshTokenDto));
 
-        verify(jwtService, times(1)).isTokenExpired(refreshTokenValue);
-        verify(jwtService, never()).extractSub(any());
+        verify(jwtServiceImpl, times(1)).isTokenExpired(refreshTokenValue);
+        verify(jwtServiceImpl, never()).extractSub(any());
         verify(userCredentialRepository, never()).findBySub(any());
     }
 
@@ -252,16 +272,19 @@ class AuthServiceTest {
 
         UUID sub = UUID.randomUUID();
 
-        when(jwtService.isTokenExpired(refreshTokenValue)).thenReturn(false);
-        when(jwtService.extractSub(refreshTokenValue)).thenReturn(sub.toString());
+        when(jwtServiceImpl.isTokenExpired(refreshTokenValue)).thenReturn(false);
+        when(jwtServiceImpl.isRefreshToken(refreshTokenValue)).thenReturn(true);
+        when(jwtServiceImpl.extractJti(refreshTokenValue)).thenReturn("test-jti");
+        when(jwtServiceImpl.extractSub(refreshTokenValue)).thenReturn(sub.toString());
+        when(redisTemplate.hasKey(anyString())).thenReturn(true);
         when(userCredentialRepository.findBySub(sub)).thenReturn(Optional.empty());
 
-        assertThrows(BadCredentialsException.class, () -> authService.refreshToken(refreshTokenDto));
+        assertThrows(BadCredentialsException.class, () -> authServiceImpl.refreshToken(refreshTokenDto));
 
-        verify(jwtService, times(1)).isTokenExpired(refreshTokenValue);
-        verify(jwtService, times(1)).extractSub(refreshTokenValue);
+        verify(jwtServiceImpl, times(1)).isTokenExpired(refreshTokenValue);
+        verify(jwtServiceImpl, times(1)).extractSub(refreshTokenValue);
         verify(userCredentialRepository, times(1)).findBySub(sub);
-        verify(jwtService, never()).generateTokens(any());
+        verify(jwtServiceImpl, never()).generateTokens(any());
     }
 
     @Test
@@ -270,25 +293,27 @@ class AuthServiceTest {
         String refreshTokenValue = "valid-refresh-token";
         refreshTokenDto.setRefreshToken(refreshTokenValue);
 
-        when(jwtService.isTokenExpired(refreshTokenValue)).thenReturn(false);
-        when(jwtService.extractSub(refreshTokenValue)).thenReturn("not-a-valid-uuid");
+        when(jwtServiceImpl.isTokenExpired(refreshTokenValue)).thenReturn(false);
+        when(jwtServiceImpl.isRefreshToken(refreshTokenValue)).thenReturn(true);
+        when(jwtServiceImpl.extractJti(refreshTokenValue)).thenReturn("test-jti");
+        when(jwtServiceImpl.extractSub(refreshTokenValue)).thenReturn("not-a-valid-uuid");
+        when(redisTemplate.hasKey(anyString())).thenReturn(true);
 
-        assertThrows(IllegalArgumentException.class, () -> authService.refreshToken(refreshTokenDto));
+        assertThrows(IllegalArgumentException.class, () -> authServiceImpl.refreshToken(refreshTokenDto));
 
-        verify(jwtService, times(1)).isTokenExpired(refreshTokenValue);
-        verify(jwtService, times(1)).extractSub(refreshTokenValue);
+        verify(jwtServiceImpl, times(1)).isTokenExpired(refreshTokenValue);
+        verify(jwtServiceImpl, times(1)).extractSub(refreshTokenValue);
         verify(userCredentialRepository, never()).findBySub(any());
     }
 
     @Test
     void testGetJwtSetSuccess() {
-
         RSAPublicKey mockPublicKey = mock(RSAPublicKey.class);
         when(mockPublicKey.getModulus()).thenReturn(new java.math.BigInteger("123456789"));
         when(mockPublicKey.getPublicExponent()).thenReturn(java.math.BigInteger.valueOf(65537));
-        when(jwtService.getPublicKey()).thenReturn(mockPublicKey);
+        when(jwtServiceImpl.getPublicKey()).thenReturn(mockPublicKey);
 
-        Map<String, Object> result = authService.getJwtSet();
+        Map<String, Object> result = authServiceImpl.getJwtSet();
 
         assertNotNull(result);
         assertTrue(result.containsKey("keys"));
@@ -306,13 +331,11 @@ class AuthServiceTest {
         assertTrue(firstKey.containsKey("kid"));
         assertEquals(JwtService.KEY_ID, firstKey.get("kid"));
 
-        verify(jwtService, atLeastOnce()).getPublicKey();
+        verify(jwtServiceImpl, atLeastOnce()).getPublicKey();
     }
 
-
     @Test
-    void testRegisterCreatesProfileDtoWithAllFields() {
-
+    void testRegisterCreatesProfileDtoWithAllFields() throws JsonProcessingException {
         CreateAuthDto createAuthDto = new CreateAuthDto();
         createAuthDto.setEmail("test@example.com");
         createAuthDto.setPassword("password123");
@@ -321,17 +344,18 @@ class AuthServiceTest {
         createAuthDto.setBirthDate(LocalDate.of(1990, 5, 15));
 
         when(passwordEncoder.encode(createAuthDto.getPassword())).thenReturn("encodedPassword");
-        when(restTemplate.postForObject(anyString(), any(CreateProfileDto.class), eq(String.class)))
-                .thenReturn("success");
+        when(objectMapper.writeValueAsString(any(CreateProfileDto.class)))
+                .thenReturn("{\"sub\":\"test\",\"email\":\"test@example.com\"}");
+        when(outboxRepository.save(any(Outbox.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userCredentialRepository.save(any(UserCredential.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         ArgumentCaptor<CreateProfileDto> profileDtoCaptor = ArgumentCaptor.forClass(CreateProfileDto.class);
-        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
 
-        authService.register(createAuthDto);
+        authServiceImpl.register(createAuthDto);
 
-        verify(restTemplate).postForObject(urlCaptor.capture(), profileDtoCaptor.capture(), eq(String.class));
-
-        assertEquals("http://localhost:8081/api/users/internal/register", urlCaptor.getValue());
+        verify(objectMapper).writeValueAsString(profileDtoCaptor.capture());
 
         CreateProfileDto capturedProfileDto = profileDtoCaptor.getValue();
         assertNotNull(capturedProfileDto.getSub());
@@ -339,23 +363,29 @@ class AuthServiceTest {
         assertEquals("Doe", capturedProfileDto.getSurname());
         assertEquals("test@example.com", capturedProfileDto.getEmail());
         assertEquals(LocalDate.of(1990, 5, 15), capturedProfileDto.getBirthDate());
+
+        verify(restTemplate, never()).postForObject(anyString(), any(), any());
     }
 
     @Test
-    void testRegisterCreatesProfileDtoWithoutOptionalFields() {
+    void testRegisterCreatesProfileDtoWithoutOptionalFields() throws JsonProcessingException {
         CreateAuthDto createAuthDto = new CreateAuthDto();
         createAuthDto.setEmail("test@example.com");
         createAuthDto.setPassword("password123");
 
         when(passwordEncoder.encode(createAuthDto.getPassword())).thenReturn("encodedPassword");
-        when(restTemplate.postForObject(anyString(), any(CreateProfileDto.class), eq(String.class)))
-                .thenReturn("success");
+        when(objectMapper.writeValueAsString(any(CreateProfileDto.class)))
+                .thenReturn("{\"sub\":\"test\",\"email\":\"test@example.com\"}");
+        when(outboxRepository.save(any(Outbox.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userCredentialRepository.save(any(UserCredential.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         ArgumentCaptor<CreateProfileDto> profileDtoCaptor = ArgumentCaptor.forClass(CreateProfileDto.class);
 
-        authService.register(createAuthDto);
+        authServiceImpl.register(createAuthDto);
 
-        verify(restTemplate).postForObject(anyString(), profileDtoCaptor.capture(), eq(String.class));
+        verify(objectMapper).writeValueAsString(profileDtoCaptor.capture());
 
         CreateProfileDto capturedProfileDto = profileDtoCaptor.getValue();
         assertNotNull(capturedProfileDto.getSub());
@@ -363,11 +393,12 @@ class AuthServiceTest {
         assertNull(capturedProfileDto.getName());
         assertNull(capturedProfileDto.getSurname());
         assertNull(capturedProfileDto.getBirthDate());
+
+        verify(restTemplate, never()).postForObject(anyString(), any(), any());
     }
 
     @Test
     void testLoginCreatesCorrectAuthenticationToken() {
-
         CreateAuthDto createAuthDto = new CreateAuthDto();
         createAuthDto.setEmail("test@example.com");
         createAuthDto.setPassword("password123");
@@ -385,14 +416,16 @@ class AuthServiceTest {
                 "refresh_token", "refresh-token"
         );
 
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(userCredential);
-        when(jwtService.generateTokens(userCredential)).thenReturn(tokens);
+        when(jwtServiceImpl.generateTokens(userCredential)).thenReturn(tokens);
+        when(jwtServiceImpl.extractJti(anyString())).thenReturn("test-jti");
 
-
-        authService.login(createAuthDto);
+        authServiceImpl.login(createAuthDto);
 
         verify(authenticationManager).authenticate(argThat(token -> {
             UsernamePasswordAuthenticationToken authToken = (UsernamePasswordAuthenticationToken) token;
@@ -402,7 +435,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void testRegisterSavesUserWithCorrectRoleAndSub() {
+    void testRegisterSavesUserWithCorrectRoleAndSub() throws JsonProcessingException {
         CreateAuthDto createAuthDto = new CreateAuthDto();
         createAuthDto.setEmail("test@example.com");
         createAuthDto.setPassword("password123");
@@ -410,12 +443,14 @@ class AuthServiceTest {
         createAuthDto.setSurname("Doe");
 
         when(passwordEncoder.encode(createAuthDto.getPassword())).thenReturn("encodedPassword");
-        when(restTemplate.postForObject(anyString(), any(CreateProfileDto.class), eq(String.class)))
-                .thenReturn("success");
+        when(objectMapper.writeValueAsString(any(CreateProfileDto.class)))
+                .thenReturn("{\"sub\":\"test\",\"email\":\"test@example.com\"}");
+        when(outboxRepository.save(any(Outbox.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         ArgumentCaptor<UserCredential> userCredentialCaptor = ArgumentCaptor.forClass(UserCredential.class);
 
-        authService.register(createAuthDto);
+        authServiceImpl.register(createAuthDto);
 
         verify(userCredentialRepository).save(userCredentialCaptor.capture());
 
@@ -427,7 +462,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void testRegisterGeneratesUniqueSubForEachUser() {
+    void testRegisterGeneratesUniqueSubForEachUser() throws JsonProcessingException {
         CreateAuthDto createAuthDto1 = new CreateAuthDto();
         createAuthDto1.setEmail("user1@example.com");
         createAuthDto1.setPassword("password123");
@@ -437,13 +472,15 @@ class AuthServiceTest {
         createAuthDto2.setPassword("password456");
 
         when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
-        when(restTemplate.postForObject(anyString(), any(CreateProfileDto.class), eq(String.class)))
-                .thenReturn("success");
+        when(objectMapper.writeValueAsString(any(CreateProfileDto.class)))
+                .thenReturn("{\"sub\":\"test\",\"email\":\"test@example.com\"}");
+        when(outboxRepository.save(any(Outbox.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         ArgumentCaptor<UserCredential> userCaptor1 = ArgumentCaptor.forClass(UserCredential.class);
 
-        authService.register(createAuthDto1);
-        authService.register(createAuthDto2);
+        authServiceImpl.register(createAuthDto1);
+        authServiceImpl.register(createAuthDto2);
 
         verify(userCredentialRepository, times(2)).save(userCaptor1.capture());
 

@@ -3,12 +3,14 @@ package com.github.everolfe.authservice.unit;
 import com.github.everolfe.authservice.entity.Role;
 import com.github.everolfe.authservice.entity.UserCredential;
 import com.github.everolfe.authservice.service.JwtService;
+import com.github.everolfe.authservice.service.impl.JwtServiceImpl;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -24,13 +26,16 @@ import static org.junit.jupiter.api.Assertions.*;
 class JwtServiceTest {
 
     @InjectMocks
+    private JwtServiceImpl jwtServiceImpl;
+
+    @Mock
     private JwtService jwtService;
 
     @BeforeEach
     void setUp() {
-        jwtService = new JwtService();
-        ReflectionTestUtils.setField(jwtService, "accessTokenExpirationMinutes", 15L);
-        ReflectionTestUtils.setField(jwtService, "refreshTokenExpirationDays", 2L);
+        jwtServiceImpl = new JwtServiceImpl();
+        ReflectionTestUtils.setField(jwtServiceImpl, "accessTokenExpirationMinutes", 15L);
+        ReflectionTestUtils.setField(jwtServiceImpl, "refreshTokenExpirationHours", 2L);
     }
 
     @Test
@@ -44,7 +49,7 @@ class JwtServiceTest {
                 .role(Role.ROLE_USER)
                 .build();
 
-        Map<String, String> tokens = jwtService.generateTokens(userCredential);
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
 
         assertNotNull(tokens);
         assertTrue(tokens.containsKey("access_token"));
@@ -65,11 +70,11 @@ class JwtServiceTest {
                 .role(Role.ROLE_ADMIN)
                 .build();
 
-        Map<String, String> tokens = jwtService.generateTokens(userCredential);
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String accessToken = tokens.get("access_token");
 
         Claims claims = Jwts.parser()
-                .verifyWith(jwtService.getPublicKey())
+                .verifyWith(jwtServiceImpl.getPublicKey())
                 .build()
                 .parseSignedClaims(accessToken)
                 .getPayload();
@@ -87,10 +92,10 @@ class JwtServiceTest {
                 .role(Role.ROLE_USER)
                 .build();
 
-        Map<String, String> tokens = jwtService.generateTokens(userCredential);
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String accessToken = tokens.get("access_token");
 
-        String extractedSub = jwtService.extractSub(accessToken);
+        String extractedSub = jwtServiceImpl.extractSub(accessToken);
 
         assertEquals(sub.toString(), extractedSub);
     }
@@ -105,10 +110,10 @@ class JwtServiceTest {
                 .role(Role.ROLE_USER)
                 .build();
 
-        Map<String, String> tokens = jwtService.generateTokens(userCredential);
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String refreshToken = tokens.get("refresh_token");
 
-        String extractedSub = jwtService.extractSub(refreshToken);
+        String extractedSub = jwtServiceImpl.extractSub(refreshToken);
 
         assertEquals(sub.toString(), extractedSub);
     }
@@ -122,10 +127,10 @@ class JwtServiceTest {
                 .role(Role.ROLE_USER)
                 .build();
 
-        Map<String, String> tokens = jwtService.generateTokens(userCredential);
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String accessToken = tokens.get("access_token");
 
-        boolean expired = jwtService.isTokenExpired(accessToken);
+        boolean expired = jwtServiceImpl.isTokenExpired(accessToken);
 
         assertFalse(expired);
     }
@@ -139,7 +144,7 @@ class JwtServiceTest {
                 .expiration(Date.from(Instant.now().minus(1, ChronoUnit.HOURS)))
                 .compact();
 
-        boolean expired = jwtService.isTokenExpired(expiredToken);
+        boolean expired = jwtServiceImpl.isTokenExpired(expiredToken);
 
         assertTrue(expired);
     }
@@ -148,7 +153,7 @@ class JwtServiceTest {
     void testIsTokenExpiredForInvalidToken() {
         String invalidToken = "invalid.token.string";
 
-        boolean expired = jwtService.isTokenExpired(invalidToken);
+        boolean expired = jwtServiceImpl.isTokenExpired(invalidToken);
 
         assertTrue(expired);
     }
@@ -157,7 +162,7 @@ class JwtServiceTest {
     void testExtractSubThrowsExceptionForInvalidToken() {
         String invalidToken = "invalid.token.string";
 
-        assertThrows(Exception.class, () -> jwtService.extractSub(invalidToken));
+        assertThrows(Exception.class, () -> jwtServiceImpl.extractSub(invalidToken));
     }
 
     @Test
@@ -170,11 +175,11 @@ class JwtServiceTest {
                 .role(Role.ROLE_ADMIN)
                 .build();
 
-        Map<String, String> tokens = jwtService.generateTokens(userCredential);
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String accessToken = tokens.get("access_token");
 
         Claims claims = Jwts.parser()
-                .verifyWith(jwtService.getPublicKey())
+                .verifyWith(jwtServiceImpl.getPublicKey())
                 .build()
                 .parseSignedClaims(accessToken)
                 .getPayload();
@@ -192,11 +197,11 @@ class JwtServiceTest {
                 .role(Role.ROLE_USER)
                 .build();
 
-        Map<String, String> tokens = jwtService.generateTokens(userCredential);
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String refreshToken = tokens.get("refresh_token");
 
         Claims claims = Jwts.parser()
-                .verifyWith(jwtService.getPublicKey())
+                .verifyWith(jwtServiceImpl.getPublicKey())
                 .build()
                 .parseSignedClaims(refreshToken)
                 .getPayload();
@@ -215,11 +220,11 @@ class JwtServiceTest {
                 .role(Role.ROLE_USER)
                 .build();
 
-        Map<String, String> tokens = jwtService.generateTokens(userCredential);
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String accessToken = tokens.get("access_token");
 
         String keyId = Jwts.parser()
-                .verifyWith(jwtService.getPublicKey())
+                .verifyWith(jwtServiceImpl.getPublicKey())
                 .build()
                 .parseSignedClaims(accessToken)
                 .getHeader()
@@ -237,11 +242,11 @@ class JwtServiceTest {
                 .role(Role.ROLE_USER)
                 .build();
 
-        Map<String, String> tokens = jwtService.generateTokens(userCredential);
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String refreshToken = tokens.get("refresh_token");
 
         String keyId = Jwts.parser()
-                .verifyWith(jwtService.getPublicKey())
+                .verifyWith(jwtServiceImpl.getPublicKey())
                 .build()
                 .parseSignedClaims(refreshToken)
                 .getHeader()
@@ -252,19 +257,19 @@ class JwtServiceTest {
 
     @Test
     void testPublicKeyIsNotNull() {
-        assertNotNull(jwtService.getPublicKey());
+        assertNotNull(jwtServiceImpl.getPublicKey());
     }
 
     @Test
     void testPrivateKeyIsNotNull() {
-        assertNotNull(jwtService.privateKey);
+        assertNotNull(jwtServiceImpl.privateKey);
     }
 
     @Test
     void testAccessTokenExpirationTime() {
-        JwtService shortLivedJwtService = new JwtService();
-        ReflectionTestUtils.setField(shortLivedJwtService, "accessTokenExpirationMinutes", 0L);
-        ReflectionTestUtils.setField(shortLivedJwtService, "refreshTokenExpirationDays", 2L);
+        JwtServiceImpl shortLivedJwtServiceImpl = new JwtServiceImpl();
+        ReflectionTestUtils.setField(shortLivedJwtServiceImpl, "accessTokenExpirationMinutes", 0L);
+        ReflectionTestUtils.setField(shortLivedJwtServiceImpl, "refreshTokenExpirationHours", 2L);
 
         UserCredential userCredential = UserCredential.builder()
                 .sub(UUID.randomUUID())
@@ -273,11 +278,11 @@ class JwtServiceTest {
                 .role(Role.ROLE_USER)
                 .build();
 
-        Map<String, String> tokens = shortLivedJwtService.generateTokens(userCredential);
+        Map<String, String> tokens = shortLivedJwtServiceImpl.generateTokens(userCredential);
         String accessToken = tokens.get("access_token");
 
 
-        boolean expired = shortLivedJwtService.isTokenExpired(accessToken);
+        boolean expired = shortLivedJwtServiceImpl.isTokenExpired(accessToken);
 
         assertTrue(expired);
     }
@@ -287,12 +292,12 @@ class JwtServiceTest {
     void testExtractSubWithMalformedToken() {
         String malformedToken = "eyJhbGciOiJSUzI1NiJ9.malformed";
 
-        assertThrows(Exception.class, () -> jwtService.extractSub(malformedToken));
+        assertThrows(Exception.class, () -> jwtServiceImpl.extractSub(malformedToken));
     }
 
     @Test
     void testIsTokenExpiredWithNullToken() {
-        boolean expired = jwtService.isTokenExpired(null);
+        boolean expired = jwtServiceImpl.isTokenExpired(null);
         assertTrue(expired, "isTokenExpired should return true for null token");
     }
 }

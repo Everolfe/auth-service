@@ -3,7 +3,7 @@ package com.github.everolfe.authservice.config;
 
 import com.github.everolfe.authservice.dao.UserCredentialRepository;
 import com.github.everolfe.authservice.entity.UserCredential;
-import com.github.everolfe.authservice.service.JwtService;
+import com.github.everolfe.authservice.service.impl.JwtServiceImpl;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -26,7 +26,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     public static final String BEARER_PREFIX = "Bearer ";
     public static final String HEADER_NAME = "Authorization";
-    private final JwtService jwtService;
+    private final JwtServiceImpl jwtServiceImpl;
     private final UserCredentialRepository userCredentialRepository;
 
     @Override
@@ -47,14 +47,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         jwt = authHeader.substring(BEARER_PREFIX.length());
 
         try {
-            sub = jwtService.extractSub(jwt);
+            sub = jwtServiceImpl.extractSub(jwt);
 
             if (sub != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
                 UserCredential userDetails = this.userCredentialRepository.findBySub(UUID.fromString(sub))
                         .orElseThrow(() -> new JwtException("User not found for token"));
 
-                if (!jwtService.isTokenExpired(jwt)) {
+                if (!jwtServiceImpl.isTokenExpired(jwt)) {
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails,
                             null,

@@ -3,6 +3,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
@@ -25,6 +26,15 @@ class BaseIntegrationTest {
             .withConnectTimeoutSeconds(120)
             .waitingFor(Wait.forListeningPort());
 
+    @Container
+    static final GenericContainer<?> redis = new GenericContainer<>(
+            DockerImageName.parse("redis:7.2-alpine")
+    )
+            .withExposedPorts(6379)
+            .withReuse(false)
+            .withStartupTimeout(Duration.ofSeconds(120))
+            .waitingFor(Wait.forListeningPort());
+
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -41,6 +51,11 @@ class BaseIntegrationTest {
         registry.add("spring.datasource.hikari.validation-timeout", () -> "5000");
         registry.add("spring.datasource.hikari.leak-detection-threshold", () -> "10000");
 
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379).toString());
+
+        registry.add("spring.cache.type", () -> "redis");
+
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("spring.jpa.properties.hibernate.dialect",
                 () -> "org.hibernate.dialect.PostgreSQLDialect");
@@ -53,5 +68,12 @@ class BaseIntegrationTest {
         assertThat(postgres.getJdbcUrl()).isNotEmpty();
         assertThat(postgres.getUsername()).isEqualTo("test");
         assertThat(postgres.getPassword()).isEqualTo("test");
+    }
+
+    @Test
+    void testRedisContainerIsRunning() {
+        assertThat(redis.isRunning()).isTrue();
+        assertThat(redis.getMappedPort(6379)).isPositive();
+        assertThat(redis.getHost()).isNotEmpty();
     }
 }

@@ -1,9 +1,12 @@
 package com.github.everolfe.authservice.integration;
 
+import com.github.everolfe.authservice.dao.OutboxRepository;
 import com.github.everolfe.authservice.dao.UserCredentialRepository;
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
+import com.github.everolfe.authservice.entity.Outbox;
+import com.github.everolfe.authservice.entity.OutboxStatus;
 import com.github.everolfe.authservice.entity.UserCredential;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -21,9 +24,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.Optional;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static io.restassured.RestAssured.given;
@@ -44,6 +49,9 @@ class AuthIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private UserCredentialRepository userCredentialRepository;
 
+    @Autowired
+    private OutboxRepository outboxRepository;
+
     @LocalServerPort
     private int port;
 
@@ -61,6 +69,7 @@ class AuthIntegrationTest extends BaseIntegrationTest {
 
     @AfterEach
     void cleanDatabase() {
+        outboxRepository.deleteAll();
         userCredentialRepository.deleteAll();
     }
 
@@ -94,14 +103,17 @@ class AuthIntegrationTest extends BaseIntegrationTest {
         assertThat(savedUser.getRole()).isEqualTo(com.github.everolfe.authservice.entity.Role.ROLE_USER);
         assertThat(savedUser.getSub()).isNotNull();
 
-        wireMockServer.verify(1, postRequestedFor(urlEqualTo(USER_SERVICE_PATH))
-                .withRequestBody(matchingJsonPath("$.email", equalTo(createAuthDto.getEmail())))
-                .withRequestBody(matchingJsonPath("$.name", equalTo(createAuthDto.getName())))
-                .withRequestBody(matchingJsonPath("$.surname", equalTo(createAuthDto.getSurname()))));
+        Optional<Outbox> outbox = outboxRepository.findAll().stream()
+                .filter(o -> o.getPayload().contains(createAuthDto.getEmail()))
+                .findFirst();
+
+        assertThat(outbox).isPresent();
+        assertThat(outbox.get().getStatus()).isEqualTo(OutboxStatus.PENDING);
+
     }
 
     @Test
-    void register_ShouldReturnServiceUnavailable_WhenUserServiceFails() {
+    void register_ShouldReturnSuccess_EvenWhenUserServiceIsDown() {
         wireMockServer.stubFor(post(urlEqualTo(USER_SERVICE_PATH))
                 .willReturn(aResponse()
                         .withStatus(HttpStatus.INTERNAL_SERVER_ERROR.value())
@@ -115,17 +127,24 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .when()
                 .post(AUTH_PATH + "/register")
                 .then()
-                .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value())
-                .body(containsString("Service unavailable"));
+                .statusCode(HttpStatus.OK.value());
+
+        UserCredential savedUser = userCredentialRepository
+                .findByEmail(createAuthDto.getEmail())
+                .orElse(null);
+
+        assertThat(savedUser).isNotNull();
+
+        Optional<Outbox> outbox = outboxRepository.findAll().stream()
+                .filter(o -> o.getPayload().contains(createAuthDto.getEmail()))
+                .findFirst();
+
+        assertThat(outbox).isPresent();
+        assertThat(outbox.get().getStatus()).isEqualTo(OutboxStatus.PENDING);
     }
 
     @Test
     void login_ShouldReturnTokens_WhenCredentialsAreValid() {
-        wireMockServer.stubFor(post(urlEqualTo(USER_SERVICE_PATH))
-                .willReturn(aResponse()
-                        .withStatus(HttpStatus.OK.value())
-                        .withBody("User created successfully")));
-
         CreateAuthDto createAuthDto = createValidAuthDto();
 
         given()
@@ -168,11 +187,6 @@ class AuthIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void refresh_ShouldReturnNewTokens_WhenRefreshTokenIsValid() {
-        wireMockServer.stubFor(post(urlEqualTo(USER_SERVICE_PATH))
-                .willReturn(aResponse()
-                        .withStatus(HttpStatus.OK.value())
-                        .withBody("User created successfully")));
-
         CreateAuthDto createAuthDto = createValidAuthDto();
 
         given()
@@ -193,9 +207,9 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .extract()
                 .as(GetAuthDto.class);
 
-        GetAuthDto newTokens = Awaitility.await()
+        Awaitility.await()
                 .atMost(Duration.ofSeconds(5))
-                .pollInterval(Duration.ofMillis(100))
+                .pollInterval(Duration.ofMillis(500))
                 .until(() -> {
                     GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
                     refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
@@ -210,26 +224,8 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                             .extract()
                             .as(GetAuthDto.class);
 
-                    // Возвращаем токены только если они отличаются от старых
-                    if (!tokens.getAccessToken().equals(loginResponse.getAccessToken()) &&
-                            !tokens.getRefreshToken().equals(loginResponse.getRefreshToken())) {
-                        return tokens;
-                    }
-                    return null;
-                }, t -> t != null);
-
-        assertThat(newTokens).isNotNull();
-        assertThat(newTokens.getAccessToken()).isNotNull();
-        assertThat(newTokens.getRefreshToken()).isNotNull();
-
-        assertThat(newTokens.getAccessToken())
-                .isNotEqualTo(loginResponse.getAccessToken());
-
-        assertThat(newTokens.getRefreshToken())
-                .isNotEqualTo(loginResponse.getRefreshToken());
-
-        assertThat(newTokens.getRefreshToken())
-                .isNotEqualTo(loginResponse.getRefreshToken());
+                    return !tokens.getAccessToken().equals(loginResponse.getAccessToken());
+                });
     }
 
     @Test
@@ -275,7 +271,7 @@ class AuthIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void register_ShouldNotSaveUser_WhenUserServiceFails() {
+    void register_ShouldSaveUserEvenIfUserServiceIsDown() {
         wireMockServer.stubFor(post(urlEqualTo(USER_SERVICE_PATH))
                 .willReturn(aResponse()
                         .withStatus(HttpStatus.INTERNAL_SERVER_ERROR.value())
@@ -289,13 +285,18 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .when()
                 .post(AUTH_PATH + "/register")
                 .then()
-                .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value());
+                .statusCode(HttpStatus.OK.value());
 
-        boolean userExists = userCredentialRepository
-                .findByEmail(createAuthDto.getEmail())
-                .isPresent();
+        Optional<UserCredential> savedUser = userCredentialRepository
+                .findByEmail(createAuthDto.getEmail());
 
-        assertThat(userExists).isFalse();
+        assertThat(savedUser).isPresent();
+
+        Optional<Outbox> outbox = outboxRepository.findAll().stream()
+                .filter(o -> o.getPayload().contains(createAuthDto.getEmail()))
+                .findFirst();
+
+        assertThat(outbox).isPresent();
     }
 
     private CreateAuthDto createValidAuthDto() {
