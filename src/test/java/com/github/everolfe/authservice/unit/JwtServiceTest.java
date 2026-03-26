@@ -300,4 +300,102 @@ class JwtServiceTest {
         boolean expired = jwtServiceImpl.isTokenExpired(null);
         assertTrue(expired, "isTokenExpired should return true for null token");
     }
+    @Test
+    void testValidateTokenAndGetUserId_WithValidAccessToken() {
+        UUID sub = UUID.randomUUID();
+        UserCredential userCredential = UserCredential.builder()
+                .sub(sub)
+                .email("test@example.com")
+                .password("encodedPassword")
+                .role(Role.ROLE_USER)
+                .build();
+
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
+        String accessToken = tokens.get("access_token");
+
+        String result = jwtServiceImpl.validateTokenAndGetUserId(accessToken);
+
+        String expected = sub.toString() + ":ROLE_USER";
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void testValidateTokenAndGetUserId_WithValidAccessTokenAndAdminRole() {
+        UUID sub = UUID.randomUUID();
+        UserCredential userCredential = UserCredential.builder()
+                .sub(sub)
+                .email("admin@example.com")
+                .password("encodedPassword")
+                .role(Role.ROLE_ADMIN)
+                .build();
+
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
+        String accessToken = tokens.get("access_token");
+
+        String result = jwtServiceImpl.validateTokenAndGetUserId(accessToken);
+
+        String expected = sub.toString() + ":ROLE_ADMIN";
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void testValidateTokenAndGetUserId_WithRefreshToken_ShouldThrowException() {
+        UserCredential userCredential = UserCredential.builder()
+                .sub(UUID.randomUUID())
+                .email("test@example.com")
+                .password("encodedPassword")
+                .role(Role.ROLE_USER)
+                .build();
+
+        Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
+        String refreshToken = tokens.get("refresh_token");
+
+        io.jsonwebtoken.JwtException exception = assertThrows(io.jsonwebtoken.JwtException.class,
+                () -> jwtServiceImpl.validateTokenAndGetUserId(refreshToken));
+
+        assertTrue(exception.getMessage().contains("Invalid token type"));
+    }
+
+    @Test
+    void testValidateTokenAndGetUserId_WithExpiredToken() {
+        JwtServiceImpl shortLivedJwtServiceImpl = new JwtServiceImpl();
+        ReflectionTestUtils.setField(shortLivedJwtServiceImpl, "accessTokenExpirationMinutes", 0L);
+        ReflectionTestUtils.setField(shortLivedJwtServiceImpl, "refreshTokenExpirationHours", 2L);
+
+        UserCredential userCredential = UserCredential.builder()
+                .sub(UUID.randomUUID())
+                .email("test@example.com")
+                .password("encodedPassword")
+                .role(Role.ROLE_USER)
+                .build();
+
+        Map<String, String> tokens = shortLivedJwtServiceImpl.generateTokens(userCredential);
+        String accessToken = tokens.get("access_token");
+
+        io.jsonwebtoken.JwtException exception = assertThrows(io.jsonwebtoken.JwtException.class,
+                () -> shortLivedJwtServiceImpl.validateTokenAndGetUserId(accessToken));
+
+        assertTrue(exception.getMessage().contains("Token is expired"));
+    }
+
+    @Test
+    void testValidateTokenAndGetUserId_WithInvalidToken() {
+        String invalidToken = "invalid.token.string";
+
+        io.jsonwebtoken.JwtException exception = assertThrows(io.jsonwebtoken.JwtException.class,
+                () -> jwtServiceImpl.validateTokenAndGetUserId(invalidToken));
+
+        assertTrue(exception.getMessage().contains("Invalid token"));
+    }
+
+    @Test
+    void testValidateTokenAndGetUserId_WithMalformedToken() {
+        String malformedToken = "eyJhbGciOiJSUzI1NiJ9.malformed";
+
+        io.jsonwebtoken.JwtException exception = assertThrows(io.jsonwebtoken.JwtException.class,
+                () -> jwtServiceImpl.validateTokenAndGetUserId(malformedToken));
+
+        assertTrue(exception.getMessage().contains("Invalid token"));
+    }
+
 }

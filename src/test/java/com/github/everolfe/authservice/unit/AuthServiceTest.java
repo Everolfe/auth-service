@@ -16,7 +16,7 @@ import com.github.everolfe.authservice.service.impl.AuthServiceImpl;
 import com.github.everolfe.authservice.service.impl.JwtServiceImpl;
 import io.jsonwebtoken.JwtException;
 import java.security.interfaces.RSAPublicKey;
-import java.util.List;
+import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,9 +36,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -488,5 +485,212 @@ class AuthServiceTest {
         UserCredential user2 = userCaptor1.getAllValues().get(1);
 
         assertNotEquals(user1.getSub(), user2.getSub(), "Sub values should be unique");
+    }
+
+    @Test
+    void testValidateToken_WithValidToken() {
+        String validToken = "valid-jwt-token";
+        String expectedUserId = "user-uuid-123";
+
+        when(jwtServiceImpl.validateTokenAndGetUserId(validToken)).thenReturn(expectedUserId);
+
+        String result = authServiceImpl.validateToken(validToken);
+
+        assertEquals(expectedUserId, result);
+        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserId(validToken);
+    }
+
+    @Test
+    void testValidateToken_WithBearerPrefix() {
+        String bearerToken = "Bearer valid-jwt-token";
+        String cleanToken = "valid-jwt-token";
+        String expectedUserId = "user-uuid-123";
+
+        when(jwtServiceImpl.validateTokenAndGetUserId(cleanToken)).thenReturn(expectedUserId);
+
+        String result = authServiceImpl.validateToken(bearerToken);
+
+        assertEquals(expectedUserId, result);
+        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserId(cleanToken);
+    }
+
+    @Test
+    void testValidateToken_WithNullToken() {
+        String result = authServiceImpl.validateToken(null);
+
+        assertEquals("INVALID: Token is required", result);
+        verify(jwtServiceImpl, never()).validateTokenAndGetUserId(anyString());
+    }
+
+    @Test
+    void testValidateToken_WithBlankToken() {
+        String result = authServiceImpl.validateToken("   ");
+
+        assertEquals("INVALID: Token is required", result);
+        verify(jwtServiceImpl, never()).validateTokenAndGetUserId(anyString());
+    }
+
+    @Test
+    void testValidateToken_WithEmptyToken() {
+        String result = authServiceImpl.validateToken("");
+
+        assertEquals("INVALID: Token is required", result);
+        verify(jwtServiceImpl, never()).validateTokenAndGetUserId(anyString());
+    }
+
+    @Test
+    void testValidateToken_WithInvalidToken() {
+        String invalidToken = "invalid-token";
+        String errorMessage = "Token expired";
+
+        when(jwtServiceImpl.validateTokenAndGetUserId(invalidToken))
+                .thenThrow(new JwtException(errorMessage));
+
+        String result = authServiceImpl.validateToken(invalidToken);
+
+        assertEquals("INVALID: " + errorMessage, result);
+        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserId(invalidToken);
+    }
+
+    @Test
+    void testLogout_Success() {
+        String refreshToken = "valid-refresh-token";
+        String jti = "test-jti-123";
+        String sub = "123e4567-e89b-12d3-a456-426614174000";
+
+        when(jwtServiceImpl.extractJti(refreshToken)).thenReturn(jti);
+        when(jwtServiceImpl.extractSub(refreshToken)).thenReturn(sub);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+
+        authServiceImpl.logout(refreshToken);
+
+        verify(jwtServiceImpl, times(1)).extractJti(refreshToken);
+        verify(jwtServiceImpl, times(1)).extractSub(refreshToken);
+        verify(redisTemplate, times(1)).delete("refresh_token:" + jti);
+        verify(setOperations, times(1)).remove("user_tokens:" + sub, jti);
+    }
+
+    @Test
+    void testLogout_WithRedisOperations() {
+        String refreshToken = "valid-refresh-token";
+        String jti = "test-jti-123";
+        String sub = "123e4567-e89b-12d3-a456-426614174000";
+
+        when(jwtServiceImpl.extractJti(refreshToken)).thenReturn(jti);
+        when(jwtServiceImpl.extractSub(refreshToken)).thenReturn(sub);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+
+        authServiceImpl.logout(refreshToken);
+
+        verify(redisTemplate).delete("refresh_token:" + jti);
+        verify(setOperations).remove("user_tokens:" + sub, jti);
+    }
+
+    @Test
+    void testRevokeAllUserTokens_WithExistingTokens() {
+        UUID userSub = UUID.randomUUID();
+        String userTokensKey = "user_tokens:" + userSub;
+        Set<String> userJtis = Set.of("jti-1", "jti-2", "jti-3");
+
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(setOperations.members(userTokensKey)).thenReturn(userJtis);
+
+        authServiceImpl.revokeAllUserTokens(userSub);
+
+        verify(setOperations, times(1)).members(userTokensKey);
+        verify(redisTemplate, times(1)).delete("refresh_token:jti-1");
+        verify(redisTemplate, times(1)).delete("refresh_token:jti-2");
+        verify(redisTemplate, times(1)).delete("refresh_token:jti-3");
+        verify(redisTemplate, times(1)).delete(userTokensKey);
+    }
+
+    @Test
+    void testRevokeAllUserTokens_WithEmptyTokenSet() {
+        UUID userSub = UUID.randomUUID();
+        String userTokensKey = "user_tokens:" + userSub;
+
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(setOperations.members(userTokensKey)).thenReturn(Collections.emptySet());
+
+        authServiceImpl.revokeAllUserTokens(userSub);
+
+        verify(setOperations, times(1)).members(userTokensKey);
+        verify(redisTemplate, never()).delete(anyString());
+        verify(redisTemplate, never()).delete(userTokensKey);
+    }
+
+    @Test
+    void testRevokeAllUserTokens_WithNullTokenSet() {
+        UUID userSub = UUID.randomUUID();
+        String userTokensKey = "user_tokens:" + userSub;
+
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(setOperations.members(userTokensKey)).thenReturn(null);
+
+        authServiceImpl.revokeAllUserTokens(userSub);
+
+        verify(setOperations, times(1)).members(userTokensKey);
+        verify(redisTemplate, never()).delete(anyString());
+        verify(redisTemplate, never()).delete(userTokensKey);
+    }
+
+    @Test
+    void testRevokeAllUserTokens_WithSingleToken() {
+        UUID userSub = UUID.randomUUID();
+        String userTokensKey = "user_tokens:" + userSub;
+        Set<String> userJtis = Set.of("single-jti");
+
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(setOperations.members(userTokensKey)).thenReturn(userJtis);
+
+        authServiceImpl.revokeAllUserTokens(userSub);
+
+        verify(setOperations, times(1)).members(userTokensKey);
+        verify(redisTemplate, times(1)).delete("refresh_token:single-jti");
+        verify(redisTemplate, times(1)).delete(userTokensKey);
+    }
+
+    @Test
+    void testLogout_WithNullRefreshToken() {
+        String refreshToken = null;
+
+        when(jwtServiceImpl.extractJti(refreshToken)).thenThrow(new IllegalArgumentException("Token cannot be null"));
+
+        assertThrows(IllegalArgumentException.class, () -> authServiceImpl.logout(refreshToken));
+    }
+
+    @Test
+    void testRevokeAllUserTokens_WithLargeTokenSet() {
+        UUID userSub = UUID.randomUUID();
+        String userTokensKey = "user_tokens:" + userSub;
+        Set<String> userJtis = new HashSet<>();
+        for (int i = 0; i < 100; i++) {
+            userJtis.add("jti-" + i);
+        }
+
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(setOperations.members(userTokensKey)).thenReturn(userJtis);
+
+        authServiceImpl.revokeAllUserTokens(userSub);
+
+        verify(setOperations, times(1)).members(userTokensKey);
+        for (int i = 0; i < 100; i++) {
+            verify(redisTemplate, times(1)).delete("refresh_token:jti-" + i);
+        }
+        verify(redisTemplate, times(1)).delete(userTokensKey);
+    }
+
+    @Test
+    void testValidateToken_WithTokenContainingBearerPrefixAndSpaces() {
+        String bearerToken = "Bearer   valid-jwt-token";
+        String cleanToken = "  valid-jwt-token";
+        String expectedUserId = "user-uuid-123";
+
+        when(jwtServiceImpl.validateTokenAndGetUserId(cleanToken)).thenReturn(expectedUserId);
+
+        String result = authServiceImpl.validateToken(bearerToken);
+
+        assertEquals(expectedUserId, result);
+        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserId(cleanToken);
     }
 }
