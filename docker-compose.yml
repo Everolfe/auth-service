@@ -41,6 +41,7 @@ services:
       D_DB_PASSWORD: ${DB_PASSWORD}
       D_DB_HOST_PORT: ${D_DB_HOST_PORT}
       D_DB_NAME: ${DB_NAME}
+      USER_SERVICE_URL: ${D_USER_URL}
     depends_on:
       postgres-db:
         condition: service_healthy
