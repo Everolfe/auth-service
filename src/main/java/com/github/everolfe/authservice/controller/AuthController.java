@@ -82,11 +82,14 @@ public class AuthController {
     }
 
     /**
-     * Validates a JWT token and returns its status.
+     * Validates a JWT token provided in the Authorization header.
      *
-     * @param authorization the Authorization header containing the Bearer token (optional)
-     * @return "VALID: username" if token is valid,
-     *         "INVALID: reason" with 401 status if token is invalid or missing
+     * @param authorization the Authorization header containing a Bearer token
+     *                      (may be null or missing)
+     * @return a {@link TokenValidationResponse}:
+     *             - 200 OK with {@code valid = true} if the token is valid</li>
+     *             - 401 Unauthorized with {@code valid = false} if the token is
+     *             missing, expired, or invalid
      */
     @GetMapping("/validate")
     public ResponseEntity<TokenValidationResponse> validate(
