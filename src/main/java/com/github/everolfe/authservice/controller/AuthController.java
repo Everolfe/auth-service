@@ -1,6 +1,7 @@
 package com.github.everolfe.authservice.controller;
 
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
+import com.github.everolfe.authservice.dto.TokenValidationResponse;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
 import com.github.everolfe.authservice.service.impl.AuthServiceImpl;
@@ -88,10 +89,12 @@ public class AuthController {
      *         "INVALID: reason" with 401 status if token is invalid or missing
      */
     @GetMapping("/validate")
-    public ResponseEntity<String> validate(@RequestHeader(value = "Authorization", required = false) String authorization) {
-        String result = authServiceImpl.validateToken(authorization);
+    public ResponseEntity<TokenValidationResponse> validate(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
 
-        if (result.startsWith("INVALID:")) {
+        TokenValidationResponse result = authServiceImpl.validateToken(authorization);
+
+        if (!result.isValid()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
         }
 

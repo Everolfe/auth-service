@@ -6,12 +6,14 @@ import com.github.everolfe.authservice.dao.OutboxRepository;
 import com.github.everolfe.authservice.dao.UserCredentialRepository;
 import com.github.everolfe.authservice.dto.CreateProfileDto;
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
+import com.github.everolfe.authservice.dto.TokenValidationResponse;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
 import com.github.everolfe.authservice.entity.Outbox;
 import com.github.everolfe.authservice.entity.Role;
 import com.github.everolfe.authservice.entity.UserCredential;
 import com.github.everolfe.authservice.service.JwtService;
+import com.github.everolfe.authservice.service.JwtUserInfo;
 import com.github.everolfe.authservice.service.impl.AuthServiceImpl;
 import com.github.everolfe.authservice.service.impl.JwtServiceImpl;
 import io.jsonwebtoken.JwtException;
@@ -494,13 +496,13 @@ class AuthServiceTest {
     void testValidateToken_WithValidToken() {
         String validToken = "valid-jwt-token";
         String expectedUserId = "user-uuid-123";
+        JwtUserInfo expectedResponse = new JwtUserInfo(expectedUserId,"ROLE_USER");
+        when(jwtServiceImpl.validateTokenAndGetUserInfo(validToken)).thenReturn(expectedResponse);
 
-        when(jwtServiceImpl.validateTokenAndGetUserId(validToken)).thenReturn(expectedUserId);
+        TokenValidationResponse result = authServiceImpl.validateToken(validToken);
 
-        String result = authServiceImpl.validateToken(validToken);
-
-        assertEquals(expectedUserId, result);
-        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserId(validToken);
+        assertEquals(expectedUserId, result.getUserId());
+        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserInfo(validToken);
     }
 
     @Test
@@ -508,23 +510,23 @@ class AuthServiceTest {
         String bearerToken = "Bearer valid-jwt-token";
         String cleanToken = "valid-jwt-token";
         String expectedUserId = "user-uuid-123";
+        JwtUserInfo expectedResponse = new JwtUserInfo(expectedUserId,"ROLE_USER");
+        when(jwtServiceImpl.validateTokenAndGetUserInfo(cleanToken)).thenReturn(expectedResponse);
 
-        when(jwtServiceImpl.validateTokenAndGetUserId(cleanToken)).thenReturn(expectedUserId);
+        TokenValidationResponse result = authServiceImpl.validateToken(bearerToken);
 
-        String result = authServiceImpl.validateToken(bearerToken);
-
-        assertEquals(expectedUserId, result);
-        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserId(cleanToken);
+        assertEquals(expectedUserId, result.getUserId());
+        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserInfo(cleanToken);
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"   ", "\t", "\n", "  \t  "})
     void testValidateToken_WithNullOrBlankToken(String token) {
-        String result = authServiceImpl.validateToken(token);
+        TokenValidationResponse result = authServiceImpl.validateToken(token);
 
-        assertEquals("INVALID: Token is required", result);
-        verify(jwtServiceImpl, never()).validateTokenAndGetUserId(anyString());
+        assertFalse(result.isValid());
+        verify(jwtServiceImpl, never()).validateTokenAndGetUserInfo(anyString());
     }
 
     @Test
@@ -532,13 +534,13 @@ class AuthServiceTest {
         String invalidToken = "invalid-token";
         String errorMessage = "Token expired";
 
-        when(jwtServiceImpl.validateTokenAndGetUserId(invalidToken))
+        when(jwtServiceImpl.validateTokenAndGetUserInfo(invalidToken))
                 .thenThrow(new JwtException(errorMessage));
 
-        String result = authServiceImpl.validateToken(invalidToken);
+        TokenValidationResponse result = authServiceImpl.validateToken(invalidToken);
 
-        assertEquals("INVALID: " + errorMessage, result);
-        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserId(invalidToken);
+        assertFalse(result.isValid());
+        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserInfo(invalidToken);
     }
 
     @Test
@@ -674,12 +676,13 @@ class AuthServiceTest {
         String bearerToken = "Bearer   valid-jwt-token";
         String cleanToken = "  valid-jwt-token";
         String expectedUserId = "user-uuid-123";
+        JwtUserInfo expectedResponse = new JwtUserInfo(expectedUserId,"ROLE_USER");
+        when(jwtServiceImpl.validateTokenAndGetUserInfo(cleanToken))
+                .thenReturn(expectedResponse);
 
-        when(jwtServiceImpl.validateTokenAndGetUserId(cleanToken)).thenReturn(expectedUserId);
+        TokenValidationResponse result = authServiceImpl.validateToken(bearerToken);
 
-        String result = authServiceImpl.validateToken(bearerToken);
-
-        assertEquals(expectedUserId, result);
-        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserId(cleanToken);
+        assertEquals(expectedUserId, result.getUserId());
+        verify(jwtServiceImpl, times(1)).validateTokenAndGetUserInfo(cleanToken);
     }
 }

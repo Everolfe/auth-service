@@ -2,6 +2,7 @@ package com.github.everolfe.authservice.service.impl;
 
 import com.github.everolfe.authservice.entity.UserCredential;
 import com.github.everolfe.authservice.service.JwtService;
+import com.github.everolfe.authservice.service.JwtUserInfo;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -85,7 +86,7 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String validateTokenAndGetUserId(String token) {
+    public JwtUserInfo validateTokenAndGetUserInfo(String token) {
         try {
             if (isRefreshToken(token)) {
                 throw new JwtException("Invalid token type: refresh token not allowed");
@@ -100,7 +101,8 @@ public class JwtServiceImpl implements JwtService {
             String scope = claims.get("scope", String.class);
 
             String role = scope != null ? scope.split(" ")[0] : "ROLE_USER";
-            return userId + ":" + role;
+
+            return new JwtUserInfo(userId, role);
 
         } catch (Exception e) {
             throw new JwtException("Invalid token: " + e.getMessage());

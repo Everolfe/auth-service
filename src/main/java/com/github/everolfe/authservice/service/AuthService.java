@@ -1,6 +1,7 @@
 package com.github.everolfe.authservice.service;
 
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
+import com.github.everolfe.authservice.dto.TokenValidationResponse;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
 import java.util.Map;
@@ -59,12 +60,12 @@ public interface AuthService {
     void revokeAllUserTokens(UUID userSub);
 
     /**
-     * Validates the provided token and returns its status.
+     * Validates the provided JWT token and returns a structured validation result.
      *
-     * @param token the token to validate (can be null or invalid)
-     * @return a string indicating the validation result:
-     *         - "VALID: username" if token is valid
-     *         - "INVALID: reason" if token is invalid
+     * @param token the token to validate (may be null, blank, or prefixed with "Bearer ")
+     * @return a {@link TokenValidationResponse} containing:
+     *          - valid = true with userId and role if the token is valid
+     *          - valid = false with an error message if the token is invalid
      */
-    String validateToken(String token);
+    TokenValidationResponse validateToken(String token);
 }

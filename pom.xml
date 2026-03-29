@@ -31,7 +31,8 @@
             **/com/github/everolfe/authservice/controller/**,
             **/com/github/everolfe/authservice/config/**,
             **/com/github/everolfe/authservice/security/**,
-            **/com/github/everolfe/authservice/service/impl/OutboxProcessor.java
+            **/com/github/everolfe/authservice/service/impl/OutboxProcessor.java,
+            **/com/github/everolfe/authservice/service/JwtUserInfo.java
         </sonar.coverage.exclusions>
         <sonar.tests>src/test/java</sonar.tests>
     </properties>

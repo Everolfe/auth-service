@@ -63,11 +63,11 @@ public interface JwtService {
     boolean isRefreshToken(String token);
 
     /**
-     * Validates the token and extracts the user ID if valid.
+     * Validates the JWT token and extracts user-related information.
      *
-     * @param token the JWT token to validate
-     * @return the user ID extracted from the token
-     * @throws RuntimeException if the token is invalid, expired, or any validation fails
+     * @param token the JWT token to validate (must not be null or blank)
+     * @return a {@link JwtUserInfo} containing extracted user ID and role
+     * @throws RuntimeException if the token is invalid, expired, malformed, or fails validation
      */
-    String validateTokenAndGetUserId(String token);
+    JwtUserInfo validateTokenAndGetUserInfo(String token);
 }

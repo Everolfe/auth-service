@@ -3,6 +3,7 @@ package com.github.everolfe.authservice.unit;
 import com.github.everolfe.authservice.entity.Role;
 import com.github.everolfe.authservice.entity.UserCredential;
 import com.github.everolfe.authservice.service.JwtService;
+import com.github.everolfe.authservice.service.JwtUserInfo;
 import com.github.everolfe.authservice.service.impl.JwtServiceImpl;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -313,10 +314,9 @@ class JwtServiceTest {
         Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String accessToken = tokens.get("access_token");
 
-        String result = jwtServiceImpl.validateTokenAndGetUserId(accessToken);
+        JwtUserInfo result = jwtServiceImpl.validateTokenAndGetUserInfo(accessToken);
 
-        String expected = sub.toString() + ":ROLE_USER";
-        assertEquals(expected, result);
+        assertEquals("ROLE_USER", result.getRole());
     }
 
     @Test
@@ -332,10 +332,9 @@ class JwtServiceTest {
         Map<String, String> tokens = jwtServiceImpl.generateTokens(userCredential);
         String accessToken = tokens.get("access_token");
 
-        String result = jwtServiceImpl.validateTokenAndGetUserId(accessToken);
+        JwtUserInfo result = jwtServiceImpl.validateTokenAndGetUserInfo(accessToken);
 
-        String expected = sub.toString() + ":ROLE_ADMIN";
-        assertEquals(expected, result);
+        assertEquals("ROLE_ADMIN", result.getRole());
     }
 
     @Test
@@ -351,7 +350,7 @@ class JwtServiceTest {
         String refreshToken = tokens.get("refresh_token");
 
         io.jsonwebtoken.JwtException exception = assertThrows(io.jsonwebtoken.JwtException.class,
-                () -> jwtServiceImpl.validateTokenAndGetUserId(refreshToken));
+                () -> jwtServiceImpl.validateTokenAndGetUserInfo(refreshToken));
 
         assertTrue(exception.getMessage().contains("Invalid token type"));
     }
@@ -373,7 +372,7 @@ class JwtServiceTest {
         String accessToken = tokens.get("access_token");
 
         io.jsonwebtoken.JwtException exception = assertThrows(io.jsonwebtoken.JwtException.class,
-                () -> shortLivedJwtServiceImpl.validateTokenAndGetUserId(accessToken));
+                () -> shortLivedJwtServiceImpl.validateTokenAndGetUserInfo(accessToken));
 
         assertTrue(exception.getMessage().contains("Token is expired"));
     }
@@ -383,7 +382,7 @@ class JwtServiceTest {
         String invalidToken = "invalid.token.string";
 
         io.jsonwebtoken.JwtException exception = assertThrows(io.jsonwebtoken.JwtException.class,
-                () -> jwtServiceImpl.validateTokenAndGetUserId(invalidToken));
+                () -> jwtServiceImpl.validateTokenAndGetUserInfo(invalidToken));
 
         assertTrue(exception.getMessage().contains("Invalid token"));
     }
@@ -393,7 +392,7 @@ class JwtServiceTest {
         String malformedToken = "eyJhbGciOiJSUzI1NiJ9.malformed";
 
         io.jsonwebtoken.JwtException exception = assertThrows(io.jsonwebtoken.JwtException.class,
-                () -> jwtServiceImpl.validateTokenAndGetUserId(malformedToken));
+                () -> jwtServiceImpl.validateTokenAndGetUserInfo(malformedToken));
 
         assertTrue(exception.getMessage().contains("Invalid token"));
     }

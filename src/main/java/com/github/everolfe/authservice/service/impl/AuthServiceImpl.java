@@ -6,6 +6,7 @@ import com.github.everolfe.authservice.dao.OutboxRepository;
 import com.github.everolfe.authservice.dao.UserCredentialRepository;
 import com.github.everolfe.authservice.dto.CreateProfileDto;
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
+import com.github.everolfe.authservice.dto.TokenValidationResponse;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
 import com.github.everolfe.authservice.entity.Outbox;
@@ -14,6 +15,7 @@ import com.github.everolfe.authservice.entity.Role;
 import com.github.everolfe.authservice.entity.UserCredential;
 import com.github.everolfe.authservice.service.AuthService;
 import com.github.everolfe.authservice.service.JwtService;
+import com.github.everolfe.authservice.service.JwtUserInfo;
 import io.jsonwebtoken.JwtException;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
@@ -187,17 +189,24 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public String validateToken(String token) {
+    public TokenValidationResponse validateToken(String token) {
         if (token == null || token.isBlank()) {
-            return "INVALID: Token is required";
+            return TokenValidationResponse.invalid("Token is required");
         }
 
         String cleanToken = token.startsWith("Bearer ") ? token.substring(7) : token;
 
         try {
-            return jwtService.validateTokenAndGetUserId(cleanToken);
+            JwtUserInfo info = jwtService.validateTokenAndGetUserInfo(cleanToken);
+
+            return TokenValidationResponse.valid(
+                    info.getUserId(),
+                    info.getRole(),
+                    "Token is valid"
+            );
+
         } catch (Exception e) {
-            return "INVALID: " + e.getMessage();
+            return TokenValidationResponse.invalid(e.getMessage());
         }
     }
 

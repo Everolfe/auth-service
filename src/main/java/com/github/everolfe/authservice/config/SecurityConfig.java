@@ -68,7 +68,8 @@ public class SecurityConfig {
                                 "/api/auth/register",
                                 "/api/auth/refresh",
                                 "/api/auth/well-known/jwks.json",
-                                "/actuator/health"
+                                "/actuator/health",
+                                "/api/auth/validate"
                         )
                         .permitAll()
                         .anyRequest()
