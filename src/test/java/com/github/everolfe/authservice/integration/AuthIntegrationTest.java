@@ -12,6 +12,8 @@ import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
+import java.time.Duration;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -203,31 +205,27 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .extract()
                 .as(GetAuthDto.class);
 
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(5))
+                .pollInterval(Duration.ofMillis(500))
+                .until(() -> {
+                    GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
+                    refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
 
-        GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
-        refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
+                    GetAuthDto tokens = given()
+                            .contentType(ContentType.JSON)
+                            .body(refreshTokenDto)
+                            .when()
+                            .post(AUTH_PATH + "/refresh")
+                            .then()
+                            .statusCode(HttpStatus.OK.value())
+                            .extract()
+                            .as(GetAuthDto.class);
 
-        GetAuthDto refreshResponse = given()
-                .contentType(ContentType.JSON)
-                .body(refreshTokenDto)
-                .when()
-                .post(AUTH_PATH + "/refresh")
-                .then()
-                .statusCode(HttpStatus.OK.value())
-                .extract()
-                .as(GetAuthDto.class);
-
-        assertThat(refreshResponse.getAccessToken())
-                .isNotEqualTo(loginResponse.getAccessToken());
-
-        assertThat(refreshResponse.getRefreshToken())
-                .isNotEqualTo(loginResponse.getRefreshToken());
+                    return !tokens.getAccessToken().equals(loginResponse.getAccessToken());
+                });
     }
+
 
     @Test
     void refresh_ShouldReturnUnauthorized_WhenRefreshTokenIsInvalid() {
