@@ -205,25 +205,30 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .extract()
                 .as(GetAuthDto.class);
 
-        Awaitility.await()
-                .atMost(Duration.ofSeconds(5))
-                .pollInterval(Duration.ofMillis(500))
-                .until(() -> {
-                    GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
-                    refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
 
-                    GetAuthDto tokens = given()
-                            .contentType(ContentType.JSON)
-                            .body(refreshTokenDto)
-                            .when()
-                            .post(AUTH_PATH + "/refresh")
-                            .then()
-                            .statusCode(HttpStatus.OK.value())
-                            .extract()
-                            .as(GetAuthDto.class);
+        GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
+        refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
 
-                    return !tokens.getAccessToken().equals(loginResponse.getAccessToken());
-                });
+        GetAuthDto refreshResponse = given()
+                .contentType(ContentType.JSON)
+                .body(refreshTokenDto)
+                .when()
+                .post(AUTH_PATH + "/refresh")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract()
+                .as(GetAuthDto.class);
+
+        assertThat(refreshResponse.getAccessToken())
+                .isNotEqualTo(loginResponse.getAccessToken());
+
+        assertThat(refreshResponse.getRefreshToken())
+                .isNotEqualTo(loginResponse.getRefreshToken());
     }
 
     @Test
