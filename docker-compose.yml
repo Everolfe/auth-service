@@ -41,7 +41,10 @@ services:
       D_DB_PASSWORD: ${DB_PASSWORD}
       D_DB_HOST_PORT: ${D_DB_HOST_PORT}
       D_DB_NAME: ${DB_NAME}
+      D_USER_URL: ${D_USER_URL}
       USER_SERVICE_URL: ${D_USER_URL}
+      REDIS_HOST: redis-cache
+      REDIS_PORT: ${REDIS_PORT}
     depends_on:
       postgres-db:
         condition: service_healthy
