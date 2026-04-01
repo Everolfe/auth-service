@@ -71,5 +71,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/userservice:latest
-            ${{ secrets.DOCKER_USERNAME }}/userservice:${{ github.run_id }}
+            ${{ secrets.DOCKER_USERNAME }}/authservice:latest
+            ${{ secrets.DOCKER_USERNAME }}/authservice:${{ github.run_id }}

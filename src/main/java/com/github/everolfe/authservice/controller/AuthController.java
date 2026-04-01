@@ -4,7 +4,7 @@ import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
 import com.github.everolfe.authservice.dto.TokenValidationResponse;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
-import com.github.everolfe.authservice.service.impl.AuthServiceImpl;
+import com.github.everolfe.authservice.service.AuthService;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthServiceImpl authServiceImpl;
+    private final AuthService authServiceImpl;
 
 
     /**
