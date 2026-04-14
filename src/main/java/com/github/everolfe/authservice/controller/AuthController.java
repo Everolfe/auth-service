@@ -1,21 +1,19 @@
 package com.github.everolfe.authservice.controller;
 
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
+import com.github.everolfe.authservice.dto.GetRegistrationStatusDto;
 import com.github.everolfe.authservice.dto.TokenValidationResponse;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
+import com.github.everolfe.authservice.dto.auth.LoginDto;
 import com.github.everolfe.authservice.service.AuthService;
 import jakarta.validation.Valid;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -28,12 +26,12 @@ public class AuthController {
     /**
      * Authenticates a user and returns access and refresh tokens.
      *
-     * @param createAuthDto the user credentials (email/username and password)
+     * @param loginDto the user credentials (email/username and password)
      * @return {@link GetAuthDto} containing the generated tokens
      */
     @PostMapping("/login")
-    public ResponseEntity<GetAuthDto> login(@Valid @RequestBody CreateAuthDto createAuthDto ) {
-        return ResponseEntity.ok(authServiceImpl.login(createAuthDto));
+    public ResponseEntity<GetAuthDto> login(@Valid @RequestBody LoginDto loginDto ) {
+        return ResponseEntity.ok(authServiceImpl.login(loginDto));
     }
 
     /**
@@ -44,12 +42,15 @@ public class AuthController {
      *         or error message if service is unavailable
      */
     @PostMapping("/register")
-    public ResponseEntity<String> register(@Valid @RequestBody CreateAuthDto createAuthDto ) {
-        if(authServiceImpl.register(createAuthDto)) {
-            return ResponseEntity.ok("User registered successfully");
+    public ResponseEntity<Map<String, String>> register(@Valid @RequestBody CreateAuthDto createAuthDto) {
+        UUID outboxId = authServiceImpl.register(createAuthDto);
+        if(outboxId != null) {
+            return ResponseEntity.accepted()
+                    .header("X-Registration-Id", outboxId.toString())
+                    .body(Map.of("message", "Registration initiated", "outboxId", outboxId.toString()));
         } else {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body("Service unavailable. Registration failed");
+                    .body(Map.of("error", "Service unavailable. Registration failed"));
         }
     }
 
@@ -113,5 +114,20 @@ public class AuthController {
     @GetMapping("/well-known/jwks.json")
     public ResponseEntity<Map<String,Object>> wellKnownJwks() {
         return ResponseEntity.ok(authServiceImpl.getJwtSet());
+    }
+
+
+    /**
+     * Retrieves the status of a user registration process by its unique identifier.
+     *
+     * @param id the UUID of the registration request (outbox/event identifier)
+     * @return a {@link GetRegistrationStatusDto} containing the current status
+     *         of the registration process (e.g., pending, completed, failed)
+     */
+    @GetMapping("/registration/{id}")
+    public ResponseEntity<GetRegistrationStatusDto> getRegistration(
+            @PathVariable("id") UUID id) {
+        GetRegistrationStatusDto statusDto = authServiceImpl.getRegistrationStatus(id);
+        return ResponseEntity.ok(statusDto);
     }
 }

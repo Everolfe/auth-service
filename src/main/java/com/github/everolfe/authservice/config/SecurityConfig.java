@@ -67,6 +67,7 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/register",
                                 "/api/auth/refresh",
+                                "/api/auth/registration/**",
                                 "/api/auth/well-known/jwks.json",
                                 "/actuator/health",
                                 "/api/auth/validate"
