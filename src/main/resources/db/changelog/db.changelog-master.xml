@@ -8,5 +8,5 @@
     <include file="/db/changelog/v1.0/20260318_init_tables.xml"/>
     <include file="/db/changelog/v1.0/20260318_add_indexes.xml"/>
     <include file="/db/changelog/v1.0/20260326_add_outbox_table.xml"/>
-
+    <include file="/db/changelog/v1.0/20260412_add_fields_in_outbox_table.xml"/>
 </databaseChangeLog>

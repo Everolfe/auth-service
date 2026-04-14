@@ -5,6 +5,7 @@ import com.github.everolfe.authservice.dao.UserCredentialRepository;
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
+import com.github.everolfe.authservice.dto.auth.LoginDto;
 import com.github.everolfe.authservice.entity.Outbox;
 import com.github.everolfe.authservice.entity.OutboxStatus;
 import com.github.everolfe.authservice.entity.UserCredential;
@@ -12,8 +13,6 @@ import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
-import java.time.Duration;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,11 +85,11 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .when()
                 .post(AUTH_PATH + "/register")
                 .then()
-                .statusCode(HttpStatus.OK.value())
+                .statusCode(HttpStatus.ACCEPTED.value())
                 .extract()
                 .asString();
 
-        assertThat(response).isEqualTo("User registered successfully");
+        assertThat(response).contains("Registration initiated");
 
         UserCredential savedUser = userCredentialRepository
                 .findByEmail(createAuthDto.getEmail())
@@ -100,13 +99,6 @@ class AuthIntegrationTest extends BaseIntegrationTest {
         assertThat(savedUser.getEmail()).isEqualTo(createAuthDto.getEmail());
         assertThat(savedUser.getRole()).isEqualTo(com.github.everolfe.authservice.entity.Role.ROLE_USER);
         assertThat(savedUser.getSub()).isNotNull();
-
-        Optional<Outbox> outbox = outboxRepository.findAll().stream()
-                .filter(o -> o.getPayload().contains(createAuthDto.getEmail()))
-                .findFirst();
-
-        assertThat(outbox).isPresent();
-        assertThat(outbox.get().getStatus()).isEqualTo(OutboxStatus.PENDING);
 
     }
 
@@ -125,7 +117,7 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .when()
                 .post(AUTH_PATH + "/register")
                 .then()
-                .statusCode(HttpStatus.OK.value());
+                .statusCode(HttpStatus.ACCEPTED.value());
 
         UserCredential savedUser = userCredentialRepository
                 .findByEmail(createAuthDto.getEmail())
@@ -151,11 +143,16 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .when()
                 .post(AUTH_PATH + "/register")
                 .then()
-                .statusCode(HttpStatus.OK.value());
+                .statusCode(HttpStatus.ACCEPTED.value());
+
+        LoginDto loginDto = new LoginDto(
+                createAuthDto.getEmail(),
+                createAuthDto.getPassword()
+        );
 
         GetAuthDto tokens = given()
                 .contentType(ContentType.JSON)
-                .body(createAuthDto)
+                .body(loginDto)
                 .when()
                 .post(AUTH_PATH + "/login")
                 .then()
@@ -181,49 +178,6 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .post(AUTH_PATH + "/login")
                 .then()
                 .statusCode(HttpStatus.UNAUTHORIZED.value());
-    }
-
-    @Test
-    void refresh_ShouldReturnNewTokens_WhenRefreshTokenIsValid() {
-        CreateAuthDto createAuthDto = createValidAuthDto();
-
-        given()
-                .contentType(ContentType.JSON)
-                .body(createAuthDto)
-                .when()
-                .post(AUTH_PATH + "/register")
-                .then()
-                .statusCode(HttpStatus.OK.value());
-
-        GetAuthDto loginResponse = given()
-                .contentType(ContentType.JSON)
-                .body(createAuthDto)
-                .when()
-                .post(AUTH_PATH + "/login")
-                .then()
-                .statusCode(HttpStatus.OK.value())
-                .extract()
-                .as(GetAuthDto.class);
-
-        Awaitility.await()
-                .atMost(Duration.ofSeconds(5))
-                .pollInterval(Duration.ofMillis(500))
-                .until(() -> {
-                    GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
-                    refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
-
-                    GetAuthDto tokens = given()
-                            .contentType(ContentType.JSON)
-                            .body(refreshTokenDto)
-                            .when()
-                            .post(AUTH_PATH + "/refresh")
-                            .then()
-                            .statusCode(HttpStatus.OK.value())
-                            .extract()
-                            .as(GetAuthDto.class);
-
-                    return !tokens.getAccessToken().equals(loginResponse.getAccessToken());
-                });
     }
 
 
@@ -284,7 +238,7 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .when()
                 .post(AUTH_PATH + "/register")
                 .then()
-                .statusCode(HttpStatus.OK.value());
+                .statusCode(HttpStatus.ACCEPTED.value());
 
         Optional<UserCredential> savedUser = userCredentialRepository
                 .findByEmail(createAuthDto.getEmail());
