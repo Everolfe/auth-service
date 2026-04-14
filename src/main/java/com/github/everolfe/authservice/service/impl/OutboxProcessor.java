@@ -30,6 +30,7 @@ public class OutboxProcessor {
     private final UserCredentialRepository userCredentialRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final OutboxProcessor self;
 
     @Value("${app.userservice.url:http://localhost:8081/api/users/internal/register}")
     private String userServiceUrl;
@@ -41,7 +42,7 @@ public class OutboxProcessor {
         List<Outbox> pendingMessages = outboxRepository.findByStatus(OutboxStatus.PENDING);
 
         for (Outbox message : pendingMessages) {
-            processSingleMessage(message.getId());
+            self.processSingleMessage(message.getId());
         }
     }
 
