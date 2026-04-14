@@ -182,6 +182,8 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .statusCode(HttpStatus.UNAUTHORIZED.value());
     }
 
+
+
     @Test
     void refresh_ShouldReturnNewTokens_WhenRefreshTokenIsValid() {
         wireMockServer.stubFor(post(urlEqualTo(USER_SERVICE_PATH))
