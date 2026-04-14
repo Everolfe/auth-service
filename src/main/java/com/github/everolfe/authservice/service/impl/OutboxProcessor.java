@@ -71,7 +71,6 @@ public class OutboxProcessor {
             );
 
             if (response.getStatusCode().is2xxSuccessful()) {
-                //outboxRepository.deleteById(message.getId());
                 message.setStatus(OutboxStatus.CREATED);
                 outboxRepository.save(message);
                 log.info("Outbox processed: {}", message.getId());
@@ -110,7 +109,6 @@ public class OutboxProcessor {
 
         try {
             userCredentialRepository.deleteBySub(message.getUserSub());
-            //outboxRepository.deleteById(message.getId());
             message.setStatus(OutboxStatus.ROLLBACK);
             outboxRepository.save(message);
             log.info("Rollback completed for: {}", message.getUserSub());

@@ -18,8 +18,8 @@ public class OutboxEventListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleOutboxCreated(OutboxCreatedEvent event) {
-        CompletableFuture.runAsync(() -> {
-            outboxProcessor.processSingleMessage(event.getOutboxId());
-        });
+        CompletableFuture.runAsync(() ->
+            outboxProcessor.processSingleMessage(event.getOutboxId())
+        );
     }
 }

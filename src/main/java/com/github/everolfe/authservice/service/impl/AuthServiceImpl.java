@@ -226,11 +226,10 @@ public class AuthServiceImpl implements AuthService {
     public GetRegistrationStatusDto getRegistrationStatus(UUID outboxId){
         Outbox outbox = outboxRepository.findById(outboxId)
                 .orElseThrow(() -> new EntityNotFoundException("Reg status not found with id" + outboxId));
-        GetRegistrationStatusDto statusDto = new GetRegistrationStatusDto(
+        return new GetRegistrationStatusDto(
                 outboxId,
                 outbox.getStatus()
         );
-        return statusDto;
     }
 
     private void storeRefreshToken(String refreshToken, UUID userSub) {
