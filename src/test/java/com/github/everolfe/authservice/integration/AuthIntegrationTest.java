@@ -183,58 +183,58 @@ class AuthIntegrationTest extends BaseIntegrationTest {
     }
 
 
-//
-//    @Test
-//    void refresh_ShouldReturnNewTokens_WhenRefreshTokenIsValid() {
-//        wireMockServer.stubFor(post(urlEqualTo(USER_SERVICE_PATH))
-//                .willReturn(aResponse()
-//                        .withStatus(HttpStatus.OK.value())
-//                        .withBody("User created successfully")));
-//        CreateAuthDto createAuthDto = createValidAuthDto();
-//
-//        given()
-//                .contentType(ContentType.JSON)
-//                .body(createAuthDto)
-//                .when()
-//                .post(AUTH_PATH + "/register")
-//                .then()
-//                .statusCode(HttpStatus.ACCEPTED.value());
-//
-//        LoginDto loginDto = new LoginDto(
-//                createAuthDto.getEmail(),
-//                createAuthDto.getPassword()
-//        );
-//
-//        GetAuthDto loginResponse = given()
-//                .contentType(ContentType.JSON)
-//                .body(loginDto)
-//                .when()
-//                .post(AUTH_PATH + "/login")
-//                .then()
-//                .statusCode(HttpStatus.OK.value())
-//                .extract()
-//                .as(GetAuthDto.class);
-//
-//        Awaitility.await()
-//                .atMost(Duration.ofSeconds(15))
-//                .pollInterval(Duration.ofMillis(500))
-//                .until(() -> {
-//                    GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
-//                    refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
-//
-//                    GetAuthDto tokens = given()
-//                            .contentType(ContentType.JSON)
-//                            .body(refreshTokenDto)
-//                            .when()
-//                            .post(AUTH_PATH + "/refresh")
-//                            .then()
-//                            .statusCode(HttpStatus.OK.value())
-//                            .extract()
-//                            .as(GetAuthDto.class);
-//
-//                    return !tokens.getAccessToken().equals(loginResponse.getAccessToken());
-//                });
-//    }
+
+    @Test
+    void refresh_ShouldReturnNewTokens_WhenRefreshTokenIsValid() {
+        wireMockServer.stubFor(post(urlEqualTo(USER_SERVICE_PATH))
+                .willReturn(aResponse()
+                        .withStatus(HttpStatus.OK.value())
+                        .withBody("User created successfully")));
+        CreateAuthDto createAuthDto = createValidAuthDto();
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(createAuthDto)
+                .when()
+                .post(AUTH_PATH + "/register")
+                .then()
+                .statusCode(HttpStatus.ACCEPTED.value());
+
+        LoginDto loginDto = new LoginDto(
+                createAuthDto.getEmail(),
+                createAuthDto.getPassword()
+        );
+
+        GetAuthDto loginResponse = given()
+                .contentType(ContentType.JSON)
+                .body(loginDto)
+                .when()
+                .post(AUTH_PATH + "/login")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract()
+                .as(GetAuthDto.class);
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(500))
+                .until(() -> {
+                    GetRefreshTokenDto refreshTokenDto = new GetRefreshTokenDto();
+                    refreshTokenDto.setRefreshToken(loginResponse.getRefreshToken());
+
+                    GetAuthDto tokens = given()
+                            .contentType(ContentType.JSON)
+                            .body(refreshTokenDto)
+                            .when()
+                            .post(AUTH_PATH + "/refresh")
+                            .then()
+                            .statusCode(HttpStatus.OK.value())
+                            .extract()
+                            .as(GetAuthDto.class);
+
+                    return !tokens.getAccessToken().equals(loginResponse.getAccessToken());
+                });
+    }
 
 
     @Test
