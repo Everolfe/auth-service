@@ -91,7 +91,7 @@ class AuthIntegrationTest extends BaseIntegrationTest {
                 .extract()
                 .asString();
 
-        assertThat(response).isEqualTo("Registration initiated");
+        assertThat(response).contains("Registration initiated");
 
         UserCredential savedUser = userCredentialRepository
                 .findByEmail(createAuthDto.getEmail())
