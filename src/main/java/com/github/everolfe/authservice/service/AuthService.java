@@ -1,9 +1,11 @@
 package com.github.everolfe.authservice.service;
 
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
+import com.github.everolfe.authservice.dto.GetRegistrationStatusDto;
 import com.github.everolfe.authservice.dto.TokenValidationResponse;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
+import com.github.everolfe.authservice.dto.auth.LoginDto;
 import java.util.Map;
 import java.util.UUID;
 
@@ -18,17 +20,17 @@ public interface AuthService {
      * Registers a new user in the system.
      *
      * @param createAuthDto the user credentials for registration
-     * @return {@code true} if registration was successful, {@code false} otherwise
+     * @return UUID of outbox event registration and async try to create user, null otherwise
      */
-    boolean register(CreateAuthDto createAuthDto);
+    UUID register(CreateAuthDto createAuthDto);
 
     /**
      * Authenticates a user and generates access and refresh tokens.
      *
-     * @param createAuthDto the user credentials for login
+     * @param loginDto the email and password for login
      * @return {@link GetAuthDto} containing the generated access token and refresh token
      */
-    GetAuthDto login(CreateAuthDto createAuthDto);
+    GetAuthDto login(LoginDto loginDto);
 
     /**
      * Generates a new access token using a valid refresh token.
@@ -68,4 +70,15 @@ public interface AuthService {
      *          - valid = false with an error message if the token is invalid
      */
     TokenValidationResponse validateToken(String token);
+
+    /**
+     * Retrieves the current status of a user registration process.
+     * This is typically used to track asynchronous registration workflows
+     * initiated via an outbox/event-driven mechanism.
+     *
+     * @param outboxId the unique identifier of the registration outbox event
+     * @return a {@link GetRegistrationStatusDto} containing the current status
+     *         of the registration process
+     */
+    GetRegistrationStatusDto getRegistrationStatus(UUID outboxId);
 }

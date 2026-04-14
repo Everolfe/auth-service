@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260412-1" author="Everolfe">
+        <addColumn tableName="outbox">
+            <column name="retry_count" type="INT" defaultValue="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_error" type="TEXT">
+            </column>
+            <column name="user_sub" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

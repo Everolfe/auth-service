@@ -2,13 +2,16 @@ package com.github.everolfe.authservice.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.everolfe.authservice.config.event.OutboxCreatedEvent;
 import com.github.everolfe.authservice.dao.OutboxRepository;
 import com.github.everolfe.authservice.dao.UserCredentialRepository;
 import com.github.everolfe.authservice.dto.CreateProfileDto;
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
+import com.github.everolfe.authservice.dto.GetRegistrationStatusDto;
 import com.github.everolfe.authservice.dto.TokenValidationResponse;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
+import com.github.everolfe.authservice.dto.auth.LoginDto;
 import com.github.everolfe.authservice.entity.Outbox;
 import com.github.everolfe.authservice.entity.OutboxStatus;
 import com.github.everolfe.authservice.entity.Role;
@@ -17,14 +20,17 @@ import com.github.everolfe.authservice.service.AuthService;
 import com.github.everolfe.authservice.service.JwtService;
 import com.github.everolfe.authservice.service.JwtUserInfo;
 import io.jsonwebtoken.JwtException;
+import jakarta.persistence.EntityNotFoundException;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Map;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -40,6 +46,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
+
+    private final ApplicationEventPublisher eventPublisher;
     private final AuthenticationManager authenticationManager;
     private final UserCredentialRepository userCredentialRepository;
     private final PasswordEncoder passwordEncoder;
@@ -52,17 +60,17 @@ public class AuthServiceImpl implements AuthService {
     private static final String REFRESH_TOKEN_PREFIX = "refresh_token:";
     private static final String USER_TOKEN_PREFIX = "user_tokens:";
 
-    @Value("${app.userservice.url:http://localhost:8081/api/users/internal/register}")
-    private String userServiceUrl;
-
     @Value("${jwt.refresh-token.expiration-hours:2}")
     private long refreshTokenExpirationHours;
 
+    @Value("${app.userservice.url:http://localhost:8081/api/users/internal/register}")
+    private String userServiceUrl;
+
     @Override
     @Transactional
-    public boolean register(CreateAuthDto createAuthDto) {
+    public UUID register(CreateAuthDto createAuthDto) {
         UUID userSub = UUID.randomUUID();
-
+        UUID outboxId = UUID.randomUUID();
         try {
             UserCredential userCredential = UserCredential.builder()
                     .sub(userSub)
@@ -76,26 +84,29 @@ public class AuthServiceImpl implements AuthService {
             String payload = objectMapper.writeValueAsString(profileDto);
 
             Outbox outbox = Outbox.builder()
-                    .id(UUID.randomUUID())
+                    .id(outboxId)
+                    .userSub(userSub)
                     .payload(payload)
                     .status(OutboxStatus.PENDING)
+                    .createdAt(LocalDateTime.now())
+                    .retryCount(0)
                     .build();
             outboxRepository.save(outbox);
-
-            return true;
+            eventPublisher.publishEvent(new OutboxCreatedEvent(outboxId));
+            return outboxId;
 
         } catch (JsonProcessingException e) {
-            return false;
+            return null;
         }
     }
 
     @Override
     @Transactional
-    public GetAuthDto login(CreateAuthDto createAuthDto) {
+    public GetAuthDto login(LoginDto loginDto) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        createAuthDto.getEmail(),
-                        createAuthDto.getPassword()
+                        loginDto.email(),
+                        loginDto.password()
                 )
         );
 
@@ -208,6 +219,18 @@ public class AuthServiceImpl implements AuthService {
         } catch (Exception e) {
             return TokenValidationResponse.invalid(e.getMessage());
         }
+    }
+
+    @Override
+    @Transactional
+    public GetRegistrationStatusDto getRegistrationStatus(UUID outboxId){
+        Outbox outbox = outboxRepository.findById(outboxId)
+                .orElseThrow(() -> new EntityNotFoundException("Reg status not found with id" + outboxId));
+        GetRegistrationStatusDto statusDto = new GetRegistrationStatusDto(
+                outboxId,
+                outbox.getStatus()
+        );
+        return statusDto;
     }
 
     private void storeRefreshToken(String refreshToken, UUID userSub) {
