@@ -2,14 +2,18 @@ package com.github.everolfe.authservice.unit;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.everolfe.authservice.config.event.OutboxCreatedEvent;
 import com.github.everolfe.authservice.dao.OutboxRepository;
 import com.github.everolfe.authservice.dao.UserCredentialRepository;
 import com.github.everolfe.authservice.dto.CreateProfileDto;
 import com.github.everolfe.authservice.dto.GetRefreshTokenDto;
+import com.github.everolfe.authservice.dto.GetRegistrationStatusDto;
 import com.github.everolfe.authservice.dto.TokenValidationResponse;
 import com.github.everolfe.authservice.dto.auth.CreateAuthDto;
 import com.github.everolfe.authservice.dto.auth.GetAuthDto;
+import com.github.everolfe.authservice.dto.auth.LoginDto;
 import com.github.everolfe.authservice.entity.Outbox;
+import com.github.everolfe.authservice.entity.OutboxStatus;
 import com.github.everolfe.authservice.entity.Role;
 import com.github.everolfe.authservice.entity.UserCredential;
 import com.github.everolfe.authservice.service.JwtService;
@@ -29,6 +33,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.SetOperations;
@@ -82,6 +87,9 @@ class AuthServiceTest {
     @InjectMocks
     private AuthServiceImpl authServiceImpl;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(authServiceImpl, "userServiceUrl", "http://localhost:8081/api/users/internal/register");
@@ -103,12 +111,13 @@ class AuthServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(objectMapper.writeValueAsString(any(CreateProfileDto.class)))
                 .thenReturn("{\"sub\":\"test\",\"email\":\"test@example.com\"}");
+        doNothing().when(eventPublisher).publishEvent(any(OutboxCreatedEvent.class));
         when(outboxRepository.save(any(Outbox.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        boolean result = authServiceImpl.register(createAuthDto);
+        UUID result = authServiceImpl.register(createAuthDto);
 
-        assertTrue(result);
+        assertNotNull(result);
         verify(passwordEncoder, times(1)).encode("password123");
         verify(userCredentialRepository, times(1)).save(any(UserCredential.class));
         verify(objectMapper, times(1)).writeValueAsString(any(CreateProfileDto.class));
@@ -128,9 +137,9 @@ class AuthServiceTest {
         when(objectMapper.writeValueAsString(any(CreateProfileDto.class)))
                 .thenThrow(new JsonProcessingException("JSON error") {});
 
-        boolean result = authServiceImpl.register(createAuthDto);
+        UUID result = authServiceImpl.register(createAuthDto);
 
-        assertFalse(result);
+        assertNull(result);
         verify(userCredentialRepository, times(1)).save(any(UserCredential.class));
         verify(objectMapper, times(1)).writeValueAsString(any(CreateProfileDto.class));
         verify(outboxRepository, never()).save(any(Outbox.class));
@@ -138,9 +147,11 @@ class AuthServiceTest {
 
     @Test
     void testLoginSuccess() {
-        CreateAuthDto createAuthDto = new CreateAuthDto();
-        createAuthDto.setEmail("test@example.com");
-        createAuthDto.setPassword("password123");
+
+        LoginDto loginDto = new LoginDto(
+                "test@example.com",
+                "password123"
+        );
 
         UUID sub = UUID.randomUUID();
         UserCredential userCredential = UserCredential.builder()
@@ -166,7 +177,7 @@ class AuthServiceTest {
         when(jwtServiceImpl.generateTokens(userCredential)).thenReturn(tokens);
         when(jwtServiceImpl.extractJti(anyString())).thenReturn("test-jti");
 
-        GetAuthDto result = authServiceImpl.login(createAuthDto);
+        GetAuthDto result = authServiceImpl.login(loginDto);
 
         assertNotNull(result);
         assertEquals("access-token-value", result.getAccessToken());
@@ -180,14 +191,16 @@ class AuthServiceTest {
 
     @Test
     void testLoginWithInvalidCredentials() {
-        CreateAuthDto createAuthDto = new CreateAuthDto();
-        createAuthDto.setEmail("test@example.com");
-        createAuthDto.setPassword("wrongpassword");
+
+        LoginDto loginDto = new LoginDto(
+                "test@example.com",
+                "wrongpassword"
+        );
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new BadCredentialsException("Invalid credentials"));
 
-        assertThrows(BadCredentialsException.class, () -> authServiceImpl.login(createAuthDto));
+        assertThrows(BadCredentialsException.class, () -> authServiceImpl.login(loginDto));
 
         verify(authenticationManager, times(1)).authenticate(any(UsernamePasswordAuthenticationToken.class));
         verify(jwtServiceImpl, never()).generateTokens(any());
@@ -195,9 +208,10 @@ class AuthServiceTest {
 
     @Test
     void testLoginWithUnauthenticatedUser() {
-        CreateAuthDto createAuthDto = new CreateAuthDto();
-        createAuthDto.setEmail("test@example.com");
-        createAuthDto.setPassword("password123");
+        LoginDto loginDto = new LoginDto(
+                "test@example.com",
+                "password123"
+        );
 
         Authentication authentication = mock(Authentication.class);
 
@@ -205,7 +219,7 @@ class AuthServiceTest {
                 .thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(false);
 
-        assertThrows(BadCredentialsException.class, () -> authServiceImpl.login(createAuthDto));
+        assertThrows(BadCredentialsException.class, () -> authServiceImpl.login(loginDto));
 
         verify(jwtServiceImpl, never()).generateTokens(any());
     }
@@ -401,9 +415,10 @@ class AuthServiceTest {
 
     @Test
     void testLoginCreatesCorrectAuthenticationToken() {
-        CreateAuthDto createAuthDto = new CreateAuthDto();
-        createAuthDto.setEmail("test@example.com");
-        createAuthDto.setPassword("password123");
+        LoginDto loginDto = new LoginDto(
+                "test@example.com",
+                "password123"
+        );
 
         UUID sub = UUID.randomUUID();
         UserCredential userCredential = UserCredential.builder()
@@ -427,7 +442,7 @@ class AuthServiceTest {
         when(jwtServiceImpl.generateTokens(userCredential)).thenReturn(tokens);
         when(jwtServiceImpl.extractJti(anyString())).thenReturn("test-jti");
 
-        authServiceImpl.login(createAuthDto);
+        authServiceImpl.login(loginDto);
 
         verify(authenticationManager).authenticate(argThat(token -> {
             UsernamePasswordAuthenticationToken authToken = (UsernamePasswordAuthenticationToken) token;
@@ -476,6 +491,7 @@ class AuthServiceTest {
         when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
         when(objectMapper.writeValueAsString(any(CreateProfileDto.class)))
                 .thenReturn("{\"sub\":\"test\",\"email\":\"test@example.com\"}");
+        doNothing().when(eventPublisher).publishEvent(any(OutboxCreatedEvent.class));
         when(outboxRepository.save(any(Outbox.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -684,5 +700,17 @@ class AuthServiceTest {
 
         assertEquals(expectedUserId, result.getUserId());
         verify(jwtServiceImpl, times(1)).validateTokenAndGetUserInfo(cleanToken);
+    }
+
+    @Test
+    void testGetRegStatus_success(){
+        Outbox outbox = new Outbox();
+        UUID uuid = UUID.randomUUID();
+        outbox.setId(uuid);
+        outbox.setStatus(OutboxStatus.CREATED);
+        when(outboxRepository.findById(uuid)).thenReturn(Optional.of(outbox));
+        GetRegistrationStatusDto result = authServiceImpl.getRegistrationStatus(uuid);
+        assertEquals(uuid,result.registrationId());
+        verify(outboxRepository, times(1)).findById(uuid);
     }
 }
